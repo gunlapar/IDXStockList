@@ -57,6 +57,9 @@ function processRequest(action, params) {
       case 'getDashboard':
         result = getDashboardStats();
         break;
+      case 'setupAutoPilot':
+        result = setupAutoPilot();
+        break;
       case 'scrapeTickers':
         const fallbackList = params.fallbackTickers ? params.fallbackTickers.split(',') : null;
         result = scrapeIDXTickers(fallbackList);
@@ -811,23 +814,37 @@ function parseNumber(val) {
 // ============================================================
 
 /**
- * Set up a time-driven trigger to auto-check trades
- * Run this function once manually to set up the trigger
+ * Endpoint called from frontend to enable all automation triggers
  */
-function setupAutoCheck() {
-  // Delete existing triggers
+function setupAutoPilot() {
   const triggers = ScriptApp.getProjectTriggers();
+  
+  // Delete all existing triggers to avoid duplicates
   for (const trigger of triggers) {
-    if (trigger.getHandlerFunction() === 'autoCheckDuringMarket') {
-      ScriptApp.deleteTrigger(trigger);
-    }
+    ScriptApp.deleteTrigger(trigger);
   }
 
-  // Create hourly trigger
+  // 1. Hourly check for TP/SL (runs every 1 hour)
   ScriptApp.newTrigger('autoCheckDuringMarket')
     .timeBased()
     .everyHours(1)
     .create();
+
+  // 2. Daily Auto-Screener (runs every day at 16:30 approx)
+  ScriptApp.newTrigger('autoScreenerDaily')
+    .timeBased()
+    .everyDays(1)
+    .atHour(16) // Triggers between 16:00 and 17:00
+    .create();
+
+  // 3. Monthly Ticker Scrape (runs 1st of every month at midnight)
+  ScriptApp.newTrigger('autoUpdateTickers')
+    .timeBased()
+    .onMonthDay(1)
+    .atHour(0)
+    .create();
+
+  return { success: true, message: 'Auto-Pilot has been activated successfully!' };
 }
 
 function autoCheckDuringMarket() {
@@ -840,6 +857,100 @@ function autoCheckDuringMarket() {
   if (hour < 9 || hour > 16) return;  // outside market hours
 
   checkAndUpdateTrades();
+}
+
+/**
+ * Initializes the daily recursive scan of 900 stocks
+ */
+function autoScreenerDaily() {
+  const now = new Date();
+  const day = now.getDay();
+  // Only run on weekdays
+  if (day === 0 || day === 6) return;
+
+  // Clear previous Screener results
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('Screener Results');
+  if (!sheet) return;
+  
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).clearContent();
+  }
+
+  // Get all tickers from Ticker List
+  const listSheet = ss.getSheetByName('Ticker List');
+  if (!listSheet) return;
+  
+  const tickerData = listSheet.getRange(2, 1, listSheet.getLastRow() - 1, 1).getValues();
+  const allTickers = tickerData.map(r => r[0]).filter(t => t);
+  
+  if (allTickers.length === 0) return;
+
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty('SCAN_TICKERS', JSON.stringify(allTickers));
+  props.setProperty('SCAN_INDEX', '0');
+
+  // Trigger the first batch
+  continueScan();
+}
+
+/**
+ * Recursive handler to scan stocks in batches
+ */
+function continueScan() {
+  const props = PropertiesService.getScriptProperties();
+  const tickersStr = props.getProperty('SCAN_TICKERS');
+  let currentIndex = parseInt(props.getProperty('SCAN_INDEX') || '0', 10);
+  
+  if (!tickersStr) return; // Nothing to scan
+  
+  const allTickers = JSON.parse(tickersStr);
+  const BATCH_SIZE = 50;
+  
+  // Slice the current batch
+  const batch = allTickers.slice(currentIndex, currentIndex + BATCH_SIZE);
+  
+  if (batch.length > 0) {
+    // Process batch (fetch from API and save to sheet)
+    const result = scanStocks(batch, 5); // Default threshold 5%
+    
+    // Write results immediately to the Screener sheet
+    if (result.results && result.results.length > 0) {
+      saveScreenerResults(result.results);
+    }
+    
+    // Update index
+    currentIndex += BATCH_SIZE;
+    props.setProperty('SCAN_INDEX', currentIndex.toString());
+  }
+
+  // Clean up any previous "after" triggers that might have accumulated
+  // Not strictly necessary as Google deletes them, but good practice
+  const triggers = ScriptApp.getProjectTriggers();
+  for (const trigger of triggers) {
+    if (trigger.getHandlerFunction() === 'continueScan' && trigger.getEventType() === ScriptApp.EventType.CLOCK) {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  }
+
+  // Check if we still have tickers left
+  if (currentIndex < allTickers.length) {
+    // Spawn a new trigger to run this function again 1 minute later
+    ScriptApp.newTrigger('continueScan')
+      .timeBased()
+      .after(60 * 1000) // 1 minute
+      .create();
+  } else {
+    // Finished scanning! Clean up properties
+    props.deleteProperty('SCAN_TICKERS');
+    props.deleteProperty('SCAN_INDEX');
+  }
+}
+
+function autoUpdateTickers() {
+  // Fallback to empty list so it fetches via API
+  scrapeIDXTickers('');
 }
 
 // ============================================================

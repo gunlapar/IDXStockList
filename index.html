@@ -58,6 +58,17 @@
          ======================================== -->
     <section class="tab-panel active" id="panel-dashboard">
 
+      <!-- Server Controls -->
+      <div class="server-controls" style="display: flex; justify-content: flex-end; margin-bottom: 1rem; align-items: center; gap: 1rem; background: var(--bg-card); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+        <div>
+          <h3 style="margin: 0; font-size: 1rem; color: var(--text-primary);">🤖 Auto-Pilot Server</h3>
+          <p style="margin: 0.2rem 0 0 0; font-size: 0.8rem; color: var(--text-secondary);">Otomatis scan 900 saham jam 16:30 & auto cek TP/SL tiap jam.</p>
+        </div>
+        <button class="btn btn-primary" id="btn-enable-autopilot" onclick="enableAutoPilot()">
+          🚀 Enable Auto-Pilot
+        </button>
+      </div>
+
       <!-- Stat Cards -->
       <div class="stats-grid">
         <div class="stat-card" id="stat-running">

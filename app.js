@@ -230,6 +230,33 @@ async function checkTrades() {
   }
 }
 
+async function enableAutoPilot() {
+  const btn = document.getElementById('btn-enable-autopilot');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Activating...';
+  }
+
+  try {
+    const result = await apiGet('setupAutoPilot');
+    if (result.success) {
+      showToast('✅ Auto-Pilot berhasil diaktifkan! Server akan menscan 900 saham setiap jam 16:30 dan mengecek TP/SL setiap jam bursa.', 'success');
+      if (btn) {
+        btn.innerHTML = '✅ Auto-Pilot Active';
+        btn.classList.add('btn-success');
+      }
+    } else {
+      throw new Error(result.error || 'Unknown error');
+    }
+  } catch (err) {
+    showToast('Gagal mengaktifkan Auto-Pilot: ' + err.message, 'error');
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '🚀 Enable Auto-Pilot';
+    }
+  }
+}
+
 // ============================================================
 // SCREENER
 // ============================================================
