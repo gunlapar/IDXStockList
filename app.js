@@ -92,10 +92,15 @@ function initApiUrl() {
 
   if (saveBtn) {
     saveBtn.addEventListener('click', () => {
-      const url = input.value.trim();
+      let url = input.value.trim();
       if (!url) {
         showToast('URL tidak boleh kosong', 'error');
         return;
+      }
+      // Auto-format if user pasted just the deployment ID
+      if (url.startsWith('AKfy') && !url.includes('/')) {
+        url = `https://script.google.com/macros/s/${url}/exec`;
+        input.value = url;
       }
       App.apiUrl = url;
       localStorage.setItem('sahamcompress_api_url', url);
