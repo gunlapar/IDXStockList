@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SahamCompress — MA Compression Screener</title>
+  <meta name="description" content="Screener saham IDX berdasarkan MA5/10/20 compression & breakout detection dengan Fibonacci TP/SL otomatis">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+</head>
+<body>
+
+  <!-- ============================================================
+       HEADER
+       ============================================================ -->
+  <header class="header">
+    <div class="header-brand">
+      <div class="logo">SAHAM<span>COMPRESS</span></div>
+      <span class="version">v1.0</span>
+    </div>
+    <div class="header-status">
+      <div class="status-indicator">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-text">Connecting...</span>
+      </div>
+      <div class="clock" id="clock">--:--:-- WIB</div>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       API URL CONFIG BAR
+       ============================================================ -->
+  <div class="config-url-bar">
+    <label>Apps Script URL:</label>
+    <input type="text" class="input" id="api-url-input"
+           placeholder="Paste Google Apps Script deployment URL here...">
+    <button class="btn btn-primary btn-sm" id="api-url-save">💾 Save</button>
+    <button class="btn btn-sm" onclick="refreshAllData()">🔄 Refresh</button>
+  </div>
+
+  <!-- ============================================================
+       NAVIGATION TABS
+       ============================================================ -->
+  <nav class="nav-tabs">
+    <button class="nav-tab active" data-tab="dashboard">📊 Dashboard</button>
+    <button class="nav-tab" data-tab="screener">🔍 Screener</button>
+    <button class="nav-tab" data-tab="running">📈 Running <span class="tab-badge">0</span></button>
+    <button class="nav-tab" data-tab="done">✅ Done <span class="tab-badge">0</span></button>
+  </nav>
+
+  <!-- ============================================================
+       MAIN CONTENT
+       ============================================================ -->
+  <main class="main-content">
+
+    <!-- ========================================
+         TAB: DASHBOARD
+         ======================================== -->
+    <section class="tab-panel active" id="panel-dashboard">
+
+      <!-- Stat Cards -->
+      <div class="stats-grid">
+        <div class="stat-card" id="stat-running">
+          <div class="stat-icon">📈</div>
+          <div class="stat-label">Running Trades</div>
+          <div class="stat-value">—</div>
+          <div class="stat-detail">Loading...</div>
+        </div>
+
+        <div class="stat-card highlight-green" id="stat-win-rate">
+          <div class="stat-icon">🎯</div>
+          <div class="stat-label">Win Rate</div>
+          <div class="stat-value">—</div>
+          <div class="stat-detail">Loading...</div>
+        </div>
+
+        <div class="stat-card highlight-green" id="stat-total-tp">
+          <div class="stat-icon">✅</div>
+          <div class="stat-label">Total HIT TP</div>
+          <div class="stat-value">—</div>
+          <div class="stat-detail">Loading...</div>
+        </div>
+
+        <div class="stat-card highlight-red" id="stat-total-sl">
+          <div class="stat-icon">🛑</div>
+          <div class="stat-label">Total HIT SL</div>
+          <div class="stat-value">—</div>
+          <div class="stat-detail">—</div>
+        </div>
+
+        <div class="stat-card" id="stat-realized">
+          <div class="stat-icon">💰</div>
+          <div class="stat-label">Total Realized P/L</div>
+          <div class="stat-value">—</div>
+          <div class="stat-detail">Loading...</div>
+        </div>
+
+        <div class="stat-card highlight-orange" id="stat-floating">
+          <div class="stat-icon">📊</div>
+          <div class="stat-label">Floating P/L</div>
+          <div class="stat-value">—</div>
+          <div class="stat-detail">—</div>
+        </div>
+      </div>
+
+      <!-- Charts Row -->
+      <div class="charts-row">
+        <div class="chart-panel">
+          <div class="chart-title">
+            <span>📈 Equity Curve (Cumulative P/L)</span>
+          </div>
+          <div class="chart-canvas-wrapper">
+            <canvas id="chart-equity"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-panel">
+          <div class="chart-title">
+            <span>🎯 Trade Distribution</span>
+          </div>
+          <div class="chart-canvas-wrapper">
+            <canvas id="chart-distribution"></canvas>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ========================================
+         TAB: SCREENER
+         ======================================== -->
+    <section class="tab-panel" id="panel-screener">
+
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <div class="toolbar-group">
+          <span class="toolbar-label">Preset:</span>
+          <select class="input" id="scan-preset">
+            <option value="from-sheet">Auto: Scan dari Ticker List & Save (Recommended)</option>
+            <option value="all">Manual: Semua IDX (900+)</option>
+            <option value="lq45">Manual: LQ45 (46)</option>
+            <option value="idx30">Manual: IDX30 (30)</option>
+          </select>
+        </div>
+
+        <div class="toolbar-separator"></div>
+
+        <div class="toolbar-group">
+          <span class="toolbar-label">Max Compression:</span>
+          <select class="input" id="scan-threshold">
+            <option value="2">≤ 2% (Strong)</option>
+            <option value="3">≤ 3%</option>
+            <option value="5" selected>≤ 5% (Default)</option>
+            <option value="7">≤ 7%</option>
+            <option value="10">≤ 10%</option>
+          </select>
+        </div>
+
+        <div class="toolbar-separator"></div>
+
+        <div class="toolbar-group">
+          <button class="btn btn-primary" id="btn-start-scan" onclick="startScan()">
+            🔍 Start Scan
+          </button>
+          <button class="btn btn-danger" id="btn-stop-scan" onclick="stopScan()" style="display:none">
+            ⏹ Stop
+          </button>
+        </div>
+
+        <div class="toolbar-separator"></div>
+
+        <div class="toolbar-group">
+          <button class="btn" id="btn-scrape-tickers" onclick="scrapeTickers()">
+            🌐 Scrape IDX Tickers
+          </button>
+          <span class="toolbar-label" id="ticker-count" style="text-transform:none">Loading...</span>
+        </div>
+
+        <div class="toolbar-group" style="margin-left:auto">
+          <button class="btn btn-sm" onclick="exportCSV('screener')">📥 Export CSV</button>
+        </div>
+      </div>
+
+      <!-- Progress Bar -->
+      <div class="progress-container" id="scan-progress">
+        <div class="progress-label">
+          <span id="scan-progress-label">Scanning...</span>
+          <span id="scan-progress-count">0/0</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="scan-progress-fill"></div>
+        </div>
+      </div>
+
+      <!-- Results Table -->
+      <div class="table-panel">
+        <div class="table-header">
+          <div class="table-title">
+            Screener Results <span class="count" id="screener-count">0</span>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th class="sortable" onclick="sortTable('screener','ticker','string')">Ticker</th>
+                <th class="sortable" onclick="sortTable('screener','close','number')">Close</th>
+                <th>MA5</th>
+                <th>MA10</th>
+                <th>MA20</th>
+                <th class="sortable" onclick="sortTable('screener','compressionRatio','number')">Compress%</th>
+                <th class="sortable" onclick="sortTable('screener','volumeRatio','number')">Vol Ratio</th>
+                <th>Breakout</th>
+                <th>RSI</th>
+                <th>MACD</th>
+                <th>Fib TP1/TP2</th>
+                <th>Fib SL</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="screener-tbody">
+              <tr><td colspan="13" class="empty-state">
+                <div class="empty-icon">🔍</div>
+                <div class="empty-title">Klik "Start Scan" untuk mulai screening</div>
+                <div class="empty-text">Pilih preset dan threshold, lalu scan</div>
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ========================================
+         TAB: RUNNING TRADES
+         ======================================== -->
+    <section class="tab-panel" id="panel-running">
+
+      <div class="table-panel">
+        <div class="table-header">
+          <div class="table-title">
+            Running Trades <span class="count">0</span>
+          </div>
+          <div class="table-actions">
+            <button class="btn btn-primary btn-sm" id="btn-check-trades" onclick="checkTrades()">
+              🔄 Check TP/SL
+            </button>
+            <button class="btn btn-sm" onclick="exportCSV('running')">📥 Export CSV</button>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>No</th>
+                <th class="sortable" onclick="sortTable('running','ticker','string')">Ticker</th>
+                <th>Date</th>
+                <th class="sortable" onclick="sortTable('running','buyPrice','number')">Buy Price</th>
+                <th>TP1</th>
+                <th>TP2</th>
+                <th>CL</th>
+                <th class="sortable" onclick="sortTable('running','currentPrice','number')">Current</th>
+                <th class="sortable" onclick="sortTable('running','floatingPnl','number')">PNL</th>
+                <th>Status</th>
+                <th>Potential</th>
+                <th>Alert</th>
+              </tr>
+            </thead>
+            <tbody id="running-tbody">
+              <tr><td colspan="12" class="empty-state">
+                <div class="empty-icon">📭</div>
+                <div class="empty-title">Loading...</div>
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ========================================
+         TAB: DONE TRADES
+         ======================================== -->
+    <section class="tab-panel" id="panel-done">
+
+      <div class="table-panel">
+        <div class="table-header">
+          <div class="table-title">
+            Done Trades <span class="count">0</span>
+          </div>
+          <div class="table-actions">
+            <div id="done-summary" style="display:flex;gap:8px;align-items:center"></div>
+            <div class="toolbar-separator"></div>
+            <select class="input" onchange="filterDoneTrades(this.value)" style="font-size:0.72rem">
+              <option value="all">All</option>
+              <option value="tp">HIT TP Only</option>
+              <option value="sl">HIT SL Only</option>
+              <option value="invalid">Invalid</option>
+            </select>
+            <button class="btn btn-sm" onclick="exportCSV('done')">📥 Export CSV</button>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>No</th>
+                <th class="sortable" onclick="sortTable('done','ticker','string')">Ticker</th>
+                <th>Date</th>
+                <th class="sortable" onclick="sortTable('done','buyPrice','number')">Buy Price</th>
+                <th>TP1</th>
+                <th>TP2</th>
+                <th>CL</th>
+                <th class="sortable" onclick="sortTable('done','currentPrice','number')">Exit Price</th>
+                <th>P/L</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="done-tbody">
+              <tr><td colspan="10" class="empty-state">
+                <div class="empty-icon">📋</div>
+                <div class="empty-title">Loading...</div>
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ============================================================
+       TAKE TRADE MODAL
+       ============================================================ -->
+  <div class="modal-overlay" id="trade-modal">
+    <div class="modal">
+      <div class="modal-title">📈 Take Trade</div>
+      <div class="modal-body">
+        <div class="field">
+          <label>Ticker</label>
+          <div class="value" id="modal-ticker">—</div>
+        </div>
+        <div class="field">
+          <label>Buy Price (Close)</label>
+          <div class="value" id="modal-price">—</div>
+        </div>
+        <div class="field">
+          <label>Compression Ratio</label>
+          <div class="value" id="modal-compression">—</div>
+        </div>
+        <div class="field">
+          <label>Breakout Signal</label>
+          <div class="value" id="modal-breakout">—</div>
+        </div>
+        <hr style="border-color:var(--border-primary);margin:16px 0">
+        <div class="field">
+          <label>Target Profit 1 (Fib 1.618)</label>
+          <div class="value green" id="modal-tp1">—</div>
+        </div>
+        <div class="field">
+          <label>Target Profit 2 (Fib 2.618)</label>
+          <div class="value green" id="modal-tp2">—</div>
+        </div>
+        <div class="field">
+          <label>Cut Loss (Fib 0.786 / Swing Low)</label>
+          <div class="value red" id="modal-sl">—</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeTakeTradeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmTakeTrade()">✅ Confirm Trade</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       TOAST CONTAINER
+       ============================================================ -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- ============================================================
+       SCRIPTS
+       ============================================================ -->
+  <script src="ticker-list.js"></script>
+  <script src="app.js"></script>
+
+</body>
+</html>
