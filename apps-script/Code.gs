@@ -1266,12 +1266,13 @@ function scrapeCorpActions() {
   let actions = [];
   
   try {
-    const url = 'https://corsproxy.io/?' + encodeURIComponent('https://www.idx.co.id/primary/CorporateAction/GetDividend?start=0&length=100');
+    const url = 'https://www.idx.co.id/primary/CorporateAction/GetDividend?start=0&length=100';
     
     const response = UrlFetchApp.fetch(url, {
       muteHttpExceptions: true,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+        'Referer': 'https://www.idx.co.id/'
       }
     });
 
