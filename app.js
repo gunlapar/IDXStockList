@@ -280,7 +280,7 @@ async function startScan() {
       if (!App.isScanning) break;
 
       const batch = sheetTickers.slice(i, i + batchSize);
-      updateScanProgress(i, sheetTickers.length, `Scanning batch ${Math.floor(i/batchSize)+1}/${Math.ceil(sheetTickers.length/batchSize)}...`);
+      updateScanProgress(i, sheetTickers.length, `Scanning batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(sheetTickers.length / batchSize)}...`);
 
       try {
         const result = await apiGet('scan', {
@@ -345,7 +345,7 @@ async function startScan() {
 
     const batch = tickers.slice(i, i + batchSize);
     App.scanProgress = i;
-    updateScanProgress(i, tickers.length, `Scanning batch ${Math.floor(i/batchSize)+1}...`);
+    updateScanProgress(i, tickers.length, `Scanning batch ${Math.floor(i / batchSize) + 1}...`);
 
     try {
       const result = await apiGet('scan', {
@@ -468,7 +468,7 @@ function showTakeTradeModal(stockData) {
   document.getElementById('modal-compression').textContent = stockData.compressionRatio + '%';
   document.getElementById('modal-breakout').textContent =
     stockData.breakoutSignal === 'confirmed' ? '✅ Confirmed' :
-    stockData.breakoutSignal === 'potential' ? '⚡ Potential' : '—';
+      stockData.breakoutSignal === 'potential' ? '⚡ Potential' : '—';
 
   if (stockData.fibonacci) {
     document.getElementById('modal-tp1').textContent = formatPrice(stockData.fibonacci.tp1) + ` (+${stockData.fibonacci.tp1Pct}%)`;
@@ -494,6 +494,16 @@ async function confirmTakeTrade() {
   const modal = document.getElementById('trade-modal');
   if (!modal) return;
 
+  // Prevent double-click / spam
+  if (modal.dataset.processing === 'true') return;
+  modal.dataset.processing = 'true';
+
+  const confirmBtn = modal.querySelector('.btn-primary');
+  if (confirmBtn) {
+    confirmBtn.disabled = true;
+    confirmBtn.innerHTML = '<span class="spinner"></span> Processing...';
+  }
+
   const stockData = JSON.parse(modal.dataset.stockData || '{}');
   if (!stockData.ticker) return;
 
@@ -510,10 +520,16 @@ async function confirmTakeTrade() {
       closeTakeTradeModal();
       await loadRunningTrades();
     } else {
-      showToast('Gagal menambahkan trade: ' + (result.error || 'Unknown'), 'error');
+      showToast('Gagal: ' + (result.error || 'Unknown'), 'error');
     }
   } catch (err) {
     showToast('Error: ' + err.message, 'error');
+  } finally {
+    modal.dataset.processing = 'false';
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      confirmBtn.innerHTML = '✅ Confirm Trade';
+    }
   }
 }
 
@@ -650,7 +666,7 @@ function renderDistributionChart(doneData) {
     ctx.fillStyle = '#8b8ca0';
     ctx.font = '11px JetBrains Mono';
     ctx.textAlign = 'left';
-    ctx.fillText(`${slice.label}: ${slice.value} (${((slice.value/total)*100).toFixed(0)}%)`, lx + 16, legendY + 3);
+    ctx.fillText(`${slice.label}: ${slice.value} (${((slice.value / total) * 100).toFixed(0)}%)`, lx + 16, legendY + 3);
     legendY += 22;
   }
 }
@@ -805,7 +821,7 @@ function renderRunningTrades(trades) {
       ((t.currentPrice - t.cl) / t.currentPrice * 100) < 2;
 
     return `<tr ${nearSL ? 'style="background:rgba(255,71,87,0.05)"' : ''}>
-      <td>${t.no || i+1}</td>
+      <td>${t.no || i + 1}</td>
       <td class="ticker">${t.ticker}</td>
       <td>${formatDate(t.recomDate)}</td>
       <td>${formatPrice(t.buyPrice)}</td>
@@ -845,7 +861,7 @@ function renderDoneTrades(trades, stats) {
     const pnlClass = pnl >= 0 ? 'positive' : 'negative';
 
     return `<tr>
-      <td>${t.no || i+1}</td>
+      <td>${t.no || i + 1}</td>
       <td class="ticker">${t.ticker}</td>
       <td>${formatDate(t.recomDate)}</td>
       <td>${formatPrice(t.buyPrice)}</td>
@@ -894,7 +910,7 @@ function renderScreenerResults(results) {
   tbody.innerHTML = results.map(r => {
     const compBadge = r.compressionLevel === 'strong' ? 'badge-strong' : 'badge-compressed';
     const breakBadge = r.breakoutSignal === 'confirmed' ? 'badge-confirmed' :
-                       r.breakoutSignal === 'potential' ? 'badge-potential' : '';
+      r.breakoutSignal === 'potential' ? 'badge-potential' : '';
     const volClass = r.volumeRatio >= 1.5 ? 'positive' : 'neutral';
     const hasFib = r.fibonacci && r.fibonacci.tp1;
 
@@ -1017,11 +1033,11 @@ function filterDoneTrades(status) {
   const filtered = status === 'all'
     ? App.doneTrades
     : App.doneTrades.filter(t => {
-        if (status === 'tp') return t.status.includes('TP');
-        if (status === 'sl') return t.status.includes('SL');
-        if (status === 'invalid') return t.status === 'invalid';
-        return true;
-      });
+      if (status === 'tp') return t.status.includes('TP');
+      if (status === 'sl') return t.status.includes('SL');
+      if (status === 'invalid') return t.status === 'invalid';
+      return true;
+    });
   renderDoneTrades(filtered);
 }
 

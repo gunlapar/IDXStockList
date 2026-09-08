@@ -556,6 +556,14 @@ function addTrade(params) {
   const sheet = ss.getSheetByName(SHEET_RUNNING);
   const data = sheet.getDataRange().getValues();
 
+  // Check for duplicate ticker in Running sheet
+  for (let i = 2; i < data.length; i++) {
+    const existingTicker = data[i][1] ? data[i][1].toString().trim().toUpperCase() : '';
+    if (existingTicker === trade.ticker.trim().toUpperCase()) {
+      return { error: `${trade.ticker} sudah ada di Running trades. Tidak boleh duplikat.`, duplicate: true };
+    }
+  }
+
   // Find next row number
   const nextNo = data.length - 1; // subtract header rows
   const today = Utilities.formatDate(new Date(), 'Asia/Jakarta', 'dd/MM/yyyy');
