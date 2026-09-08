@@ -271,6 +271,56 @@ function calcFibonacci(swingHigh, swingLow, direction) {
   }
 }
 
+/**
+ * Calculate Standard Deviation
+ */
+function calcStdDev(closes, period, sma) {
+  if (closes.length < period) return null;
+  const slice = closes.slice(closes.length - period);
+  const variance = slice.reduce((sum, val) => sum + Math.pow(val - sma, 2), 0) / period;
+  return Math.sqrt(variance);
+}
+
+/**
+ * Calculate Bollinger Bands
+ */
+function calcBollingerBands(closes, period, multiplier) {
+  const sma = calcSMA(closes, period);
+  if (sma === null) return null;
+  const stdDev = calcStdDev(closes, period, sma);
+  if (stdDev === null) return null;
+  
+  const upper = sma + (multiplier * stdDev);
+  const lower = sma - (multiplier * stdDev);
+  const bandWidth = (upper - lower) / sma;
+  
+  return { middle: sma, upper, lower, bandWidth };
+}
+
+/**
+ * Calculate Average True Range (ATR)
+ */
+function calcATR(data, period) {
+  if (data.length < period + 1) return null;
+  
+  let trueRanges = [];
+  // Calculate TR for the last `period` days
+  for (let i = data.length - period; i < data.length; i++) {
+    const high = data[i].high;
+    const low = data[i].low;
+    const prevClose = data[i - 1].close;
+    
+    const tr1 = high - low;
+    const tr2 = Math.abs(high - prevClose);
+    const tr3 = Math.abs(low - prevClose);
+    
+    trueRanges.push(Math.max(tr1, tr2, tr3));
+  }
+  
+  // Simple Moving Average of TR (SMA is sufficient for our SL logic)
+  return trueRanges.reduce((a, b) => a + b, 0) / period;
+}
+
 // ============================================================
 // COMPRESSION & BREAKOUT DETECTION
 // ============================================================
@@ -322,15 +372,20 @@ function analyzeStock(ticker) {
 
   // 3. SIDEWAYS / CONSOLIDATION FILTER
   // Pastikan pergerakan harga 20 hari terakhir benar-benar sideways (tidak volatile)
-  // Range antara harga tertinggi dan terendah selama 20 hari maksimal 15-20%
+  // Range antara harga tertinggi dan terendah selama 20 hari maksimal 30%
   const recentData = data.slice(-20);
   const maxHigh20 = Math.max(...recentData.map(d => d.high));
   const minLow20 = Math.min(...recentData.map(d => d.low));
   const priceRangePct = ((maxHigh20 - minLow20) / lastCandle.close) * 100;
   
-  // Jika range ayunan harga dalam 1 bulan terakhir > 20%, berarti terlalu liar (bukan sideways)
-  if (priceRangePct > 20) {
-    return { ticker, error: 'Too volatile (>20% range), not sideways', skip: true };
+  if (priceRangePct > 30) {
+    return { ticker, error: 'Too volatile (>30% range), not sideways', skip: true };
+  }
+
+  // 4. BOLLINGER BANDS SQUEEZE FILTER
+  const bb = calcBollingerBands(closes, 20, 2);
+  if (!bb || bb.bandWidth > 0.15) { // Bandwidth > 15% means not a tight squeeze
+    return { ticker, error: 'Bollinger Bands not squeezing (>15%)', skip: true };
   }
 
   // Compression ratio
@@ -379,21 +434,18 @@ function analyzeStock(ticker) {
   const rsi = calcRSI(closes, 14);
   const macd = calcMACD(closes);
 
-  // Fibonacci (if breakout detected)
-  let fibonacci = null;
-  if (breakoutSignal !== 'none' && breakoutDirection === 'bullish') {
-    const swings = findSwingPoints(data, 30);
-    if (swings.swingHigh && swings.swingLow) {
-      fibonacci = calcFibonacci(swings.swingHigh, swings.swingLow, 'bullish');
-      // Ensure SL doesn't go above swing low
-      if (fibonacci.sl > swings.swingLow) {
-        fibonacci.sl = fibonacci.slFloor;
-      }
-      // Calculate potential gain percentages
-      fibonacci.tp1Pct = ((fibonacci.tp1 - lastCandle.close) / lastCandle.close * 100).toFixed(2);
-      fibonacci.tp2Pct = ((fibonacci.tp2 - lastCandle.close) / lastCandle.close * 100).toFixed(2);
-      fibonacci.slPct = ((fibonacci.sl - lastCandle.close) / lastCandle.close * 100).toFixed(2);
-    }
+  // ATR & Trading Targets (if breakout detected)
+  const atr = calcATR(data, 14);
+  let targets = null;
+  if (breakoutSignal !== 'none' && breakoutDirection === 'bullish' && atr !== null) {
+    targets = {
+      tp1: Math.round(lastCandle.close + (2 * atr)),
+      tp2: Math.round(lastCandle.close + (3 * atr)),
+      sl: Math.round(lastCandle.close - (1.5 * atr)),
+    };
+    targets.tp1Pct = ((targets.tp1 - lastCandle.close) / lastCandle.close * 100).toFixed(2);
+    targets.tp2Pct = ((targets.tp2 - lastCandle.close) / lastCandle.close * 100).toFixed(2);
+    targets.slPct = ((targets.sl - lastCandle.close) / lastCandle.close * 100).toFixed(2);
   }
 
   return {
@@ -412,7 +464,9 @@ function analyzeStock(ticker) {
     breakoutDirection,
     rsi: rsi ? Math.round(rsi * 100) / 100 : null,
     macdHistogram: macd.histogram ? Math.round(macd.histogram * 100) / 100 : null,
-    fibonacci,
+    bbBandwidth: Math.round(bb.bandWidth * 10000) / 100, // as percentage
+    atr: atr ? Math.round(atr * 100) / 100 : null,
+    targets,
     skip: false
   };
 }
