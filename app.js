@@ -7,7 +7,7 @@
 // ============================================================
 const App = {
   // Google Apps Script deployment URL — user must set this
-  apiUrl: localStorage.getItem('sahamcompress_api_url') || '',
+  apiUrl: localStorage.getItem('sahamcompress_api_url') || 'https://script.google.com/macros/s/AKfycbz9MIFczkc7CB6JdRrwM2NSpLIO8gb6iM6HxQEzcd_C/dev',
 
   // Current tab
   activeTab: 'dashboard',
