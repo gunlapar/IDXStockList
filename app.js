@@ -154,6 +154,7 @@ async function refreshAllData() {
       loadRunningTrades(),
       loadDoneTrades(),
       loadTickerCount(),
+      fetchCorpActions(),
     ]);
     showToast('Data berhasil di-refresh', 'success');
   } catch (err) {
@@ -944,9 +945,10 @@ function renderScreenerResults(results) {
       r.breakoutSignal === 'potential' ? 'badge-potential' : '';
     const volClass = r.volumeRatio >= 1.5 ? 'positive' : 'neutral';
     const hasTargets = r.targets && r.targets.tp1;
+    const corpWarning = r.corpActionWarning ? `<br><span class="badge badge-sl" style="font-size:0.6rem;margin-top:4px">${r.corpActionWarning}</span>` : '';
 
     return `<tr>
-      <td class="ticker">${r.ticker}</td>
+      <td class="ticker">${r.ticker} ${corpWarning}</td>
       <td>${formatPrice(r.close)}</td>
       <td>${formatPrice(r.ma5)}</td>
       <td>${formatPrice(r.ma10)}</td>
@@ -1194,4 +1196,57 @@ function loadCachedData() {
     renderDoneTrades(App.doneTrades, done);
     updateTabBadge('done', App.doneTrades.length);
   }
+}
+
+// ============================================================
+// CORPORATE ACTIONS
+// ============================================================
+
+async function fetchCorpActions(forceSync = false) {
+  const tbody = document.getElementById('corp-actions-tbody');
+  if (!tbody) return;
+
+  if (forceSync) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">🔄 Syncing from IDX...</td></tr>';
+    try {
+      await apiGet('scrapeCorpActions');
+      showToast('Berhasil sync Corporate Actions dari IDX', 'success');
+    } catch (err) {
+      showToast('Gagal sync Corporate Actions: ' + err.message, 'error');
+    }
+  }
+
+  try {
+    const data = await apiGet('getCorpActions');
+    App.corpActions = data.actions || [];
+    renderCorpActions();
+  } catch (err) {
+    console.error('Failed to fetch Corp Actions:', err);
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state" style="color:var(--text-danger)">Gagal memuat data Corporate Actions</td></tr>';
+  }
+}
+
+function renderCorpActions() {
+  const tbody = document.getElementById('corp-actions-tbody');
+  if (!tbody) return;
+
+  if (!App.corpActions || App.corpActions.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Tidaka ada jadwal aksi korporasi terdekat</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = '';
+  App.corpActions.forEach(a => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-weight:bold;color:var(--text-primary)">${a.ticker}</td>
+      <td>${a.type}</td>
+      <td style="color:var(--text-success)">Rp ${a.amount}</td>
+      <td>${a.cumDate}</td>
+      <td style="font-weight:bold;color:var(--text-danger)">${a.exDate}</td>
+      <td>${a.recordingDate}</td>
+      <td>${a.paymentDate}</td>
+    `;
+    tbody.appendChild(tr);
+  });
 }

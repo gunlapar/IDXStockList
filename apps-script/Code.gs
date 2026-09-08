@@ -60,6 +60,12 @@ function processRequest(action, params) {
       case 'setupAutoPilot':
         result = setupAutoPilot();
         break;
+      case 'getCorpActions':
+        result = getCorpActions();
+        break;
+      case 'scrapeCorpActions':
+        result = scrapeCorpActions();
+        break;
       case 'scrapeTickers':
         const fallbackList = params.fallbackTickers ? params.fallbackTickers.split(',') : null;
         result = scrapeIDXTickers(fallbackList);
@@ -485,6 +491,16 @@ function scanStocks(tickers, threshold) {
   const results = [];
   const errors = [];
 
+  // Load Corp Actions for warnings
+  const corpActionsData = getCorpActions().actions;
+  const corpActionsMap = {};
+  corpActionsData.forEach(a => {
+    if (!corpActionsMap[a.ticker]) corpActionsMap[a.ticker] = [];
+    corpActionsMap[a.ticker].push(a);
+  });
+
+  const now = new Date();
+
   for (let i = 0; i < tickers.length; i++) {
     const ticker = tickers[i].trim().toUpperCase();
     if (!ticker) continue;
@@ -494,6 +510,13 @@ function scanStocks(tickers, threshold) {
       if (analysis.skip) {
         errors.push({ ticker, error: analysis.error });
       } else if (analysis.compressionRatio <= threshold) {
+        // Check for Corp Actions
+        if (corpActionsMap[ticker]) {
+          const upcoming = corpActionsMap[ticker].filter(a => new Date(a.exDate) > now);
+          if (upcoming.length > 0) {
+            analysis.corpActionWarning = `⚠️ Dividend Ex-Date: ${upcoming[0].exDate}`;
+          }
+        }
         results.push(analysis);
       }
 
@@ -844,6 +867,13 @@ function setupAutoPilot() {
     .atHour(0)
     .create();
 
+  // 4. Daily Corporate Actions Scrape (runs every day at 01:00)
+  ScriptApp.newTrigger('scrapeCorpActions')
+    .timeBased()
+    .everyDays(1)
+    .atHour(1)
+    .create();
+
   return { success: true, message: 'Auto-Pilot has been activated successfully!' };
 }
 
@@ -1180,9 +1210,9 @@ function saveScreenerResults(results) {
     'COMPRESSION %', 'LEVEL', 'VOLUME', 'AVG VOL 20',
     'VOL RATIO', 'BREAKOUT SIGNAL', 'DIRECTION',
     'RSI', 'MACD', 'FIB TP1', 'FIB TP2', 'FIB SL',
-    'TP1 %', 'TP2 %', 'SL %', 'SCAN DATE'
+    'TP1 %', 'TP2 %', 'SL %', 'SCAN DATE', 'CORP ACTION'
   ]];
-  sheet.getRange(1, 1, 1, 22).setValues(headers);
+  sheet.getRange(1, 1, 1, 23).setValues(headers);
 
   // Data rows
   const now = Utilities.formatDate(new Date(), 'Asia/Jakarta', 'dd/MM/yyyy HH:mm');
@@ -1208,12 +1238,121 @@ function saveScreenerResults(results) {
     r.fibonacci ? r.fibonacci.tp1Pct : '',
     r.fibonacci ? r.fibonacci.tp2Pct : '',
     r.fibonacci ? r.fibonacci.slPct : '',
-    now
+    now,
+    r.corpActionWarning || ''
   ]);
 
   if (rows.length > 0) {
-    sheet.getRange(2, 1, rows.length, 22).setValues(rows);
+    sheet.getRange(2, 1, rows.length, 23).setValues(rows);
   }
 
   return { success: true, saved: rows.length };
+}
+
+// ============================================================
+// CORPORATE ACTIONS (DIVIDENDS)
+// ============================================================
+
+/**
+ * Scrape Corporate Actions (Dividends) from IDX API
+ * We use corsproxy.io to bypass any geo-blocks or 403s on Google's IPs
+ */
+function scrapeCorpActions() {
+  let actions = [];
+  
+  try {
+    const url = 'https://corsproxy.io/?' + encodeURIComponent('https://www.idx.co.id/primary/CorporateAction/GetDividend?start=0&length=100');
+    
+    const response = UrlFetchApp.fetch(url, {
+      muteHttpExceptions: true,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+      }
+    });
+
+    if (response.getResponseCode() === 200) {
+      const data = JSON.parse(response.getContentText());
+      if (data && data.data) {
+        actions = data.data.map(item => ({
+          ticker: item.StockCode,
+          type: 'Cash Dividend',
+          amount: item.DividendPerShare,
+          cumDate: item.CumDate,
+          exDate: item.ExDate,
+          recordingDate: item.RecordingDate,
+          paymentDate: item.PaymentDate
+        }));
+      }
+    }
+  } catch (err) {
+    console.error('Failed to fetch from IDX:', err);
+  }
+
+  // Save to sheet
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName('Corp Actions');
+  if (!sheet) {
+    sheet = ss.insertSheet('Corp Actions');
+    sheet.appendRow(['Ticker', 'Type', 'Amount', 'CumDate', 'ExDate', 'RecordingDate', 'PaymentDate']);
+    sheet.getRange("1:1").setFontWeight("bold");
+    sheet.setFrozenRows(1);
+  } else {
+    // Clear old data
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).clearContent();
+    }
+  }
+
+  if (actions.length > 0) {
+    // Filter out old dividends (ExDate already passed by more than 7 days)
+    const now = new Date();
+    const validActions = actions.filter(a => {
+      if (!a.exDate) return false;
+      const ex = new Date(a.exDate);
+      return (ex.getTime() > now.getTime() - (7 * 24 * 60 * 60 * 1000));
+    });
+
+    const rows = validActions.map(a => [
+      a.ticker, a.type, a.amount, 
+      formatDateStr(a.cumDate), formatDateStr(a.exDate), 
+      formatDateStr(a.recordingDate), formatDateStr(a.paymentDate)
+    ]);
+    
+    if (rows.length > 0) {
+      sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
+    }
+  }
+  
+  return { count: actions.length, actions: actions };
+}
+
+function formatDateStr(dateStr) {
+  if (!dateStr) return '';
+  return dateStr.split('T')[0];
+}
+
+function getCorpActions() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('Corp Actions');
+  if (!sheet) return { actions: [] };
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { actions: [] };
+
+  const data = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+  const actions = data.map(row => ({
+    ticker: row[0],
+    type: row[1],
+    amount: row[2],
+    cumDate: formatDateStr(row[3] ? row[3].toString() : ''),
+    exDate: formatDateStr(row[4] ? row[4].toString() : ''),
+    recordingDate: formatDateStr(row[5] ? row[5].toString() : ''),
+    paymentDate: formatDateStr(row[6] ? row[6].toString() : '')
+  }));
+
+  // Sort by ExDate ascending
+  actions.sort((a, b) => new Date(a.exDate) - new Date(b.exDate));
+
+  return { actions };
 }

@@ -46,6 +46,7 @@
     <button class="nav-tab" data-tab="screener">🔍 Screener</button>
     <button class="nav-tab" data-tab="running">📈 Running <span class="tab-badge">0</span></button>
     <button class="nav-tab" data-tab="done">✅ Done <span class="tab-badge">0</span></button>
+    <button class="nav-tab" data-tab="corp-actions">📅 Corp Actions</button>
   </nav>
 
   <!-- ============================================================
@@ -338,6 +339,43 @@
         </div>
       </div>
 
+    </section>
+
+    <!-- ========================================
+         TAB: CORP ACTIONS
+         ======================================== -->
+    <section class="tab-panel" id="panel-corp-actions">
+      <div class="table-container">
+        <div class="table-header">
+          <div class="table-title">
+            📅 Upcoming Dividends
+          </div>
+          <div class="table-actions">
+            <button class="btn btn-primary btn-sm" onclick="fetchCorpActions(true)">🔄 Sync IDX API</button>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Ticker</th>
+                <th>Action Type</th>
+                <th>Amount</th>
+                <th>Cum Date</th>
+                <th>Ex Date</th>
+                <th>Recording Date</th>
+                <th>Payment Date</th>
+              </tr>
+            </thead>
+            <tbody id="corp-actions-tbody">
+              <tr><td colspan="7" class="empty-state">
+                <div class="empty-icon">📅</div>
+                <div class="empty-title">Loading...</div>
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
   </main>
