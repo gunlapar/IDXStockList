@@ -452,16 +452,14 @@ async function confirmTakeTrade() {
   const stockData = JSON.parse(modal.dataset.stockData || '{}');
   if (!stockData.ticker) return;
 
-  const trade = {
-    ticker: stockData.ticker,
-    buyPrice: stockData.close,
-    tp1: stockData.fibonacci ? stockData.fibonacci.tp1 : 0,
-    tp2: stockData.fibonacci ? stockData.fibonacci.tp2 : 0,
-    cl: stockData.fibonacci ? stockData.fibonacci.sl : 0,
-  };
-
   try {
-    const result = await apiPost('addTrade', { trade });
+    const result = await apiGet('addTrade', {
+      ticker: stockData.ticker,
+      buyPrice: stockData.close.toString(),
+      tp1: stockData.fibonacci ? stockData.fibonacci.tp1.toString() : '0',
+      tp2: stockData.fibonacci ? stockData.fibonacci.tp2.toString() : '0',
+      cl: stockData.fibonacci ? stockData.fibonacci.sl.toString() : '0',
+    });
     if (result.success) {
       showToast(`✅ Trade ${stockData.ticker} ditambahkan ke Running`, 'success');
       closeTakeTradeModal();

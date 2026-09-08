@@ -69,7 +69,7 @@ function processRequest(action, params) {
         result = scanFromSheet(autoThreshold);
         break;
       case 'addTrade':
-        result = addTrade(params.trade);
+        result = addTrade(params);
         break;
       case 'updateStatus':
         result = updateTradeStatus(params.ticker, params.status);
@@ -537,8 +537,16 @@ function getDoneTrades() {
 /**
  * Add new trade to Running sheet
  */
-function addTrade(trade) {
+function addTrade(params) {
+  // Support both flat params (from GET) and nested trade object (from POST)
+  const trade = params.trade || params;
   if (!trade || !trade.ticker) return { error: 'Trade data with ticker is required' };
+  
+  // Parse numbers (GET params come as strings)
+  trade.buyPrice = parseNumber(trade.buyPrice);
+  trade.tp1 = parseNumber(trade.tp1);
+  trade.tp2 = parseNumber(trade.tp2);
+  trade.cl = parseNumber(trade.cl);
 
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = ss.getSheetByName(SHEET_RUNNING);
