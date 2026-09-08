@@ -469,11 +469,15 @@ function showTakeTradeModal(stockData) {
   document.getElementById('modal-breakout').textContent =
     stockData.breakoutSignal === 'confirmed' ? '✅ Confirmed' :
       stockData.breakoutSignal === 'potential' ? '⚡ Potential' : '—';
+  
+  if (document.getElementById('modal-bb')) {
+    document.getElementById('modal-bb').textContent = stockData.bbBandwidth ? stockData.bbBandwidth + '%' : '—';
+  }
 
-  if (stockData.fibonacci) {
-    document.getElementById('modal-tp1').textContent = formatPrice(stockData.fibonacci.tp1) + ` (+${stockData.fibonacci.tp1Pct}%)`;
-    document.getElementById('modal-tp2').textContent = formatPrice(stockData.fibonacci.tp2) + ` (+${stockData.fibonacci.tp2Pct}%)`;
-    document.getElementById('modal-sl').textContent = formatPrice(stockData.fibonacci.sl) + ` (${stockData.fibonacci.slPct}%)`;
+  if (stockData.targets) {
+    document.getElementById('modal-tp1').textContent = formatPrice(stockData.targets.tp1) + ` (+${stockData.targets.tp1Pct}%)`;
+    document.getElementById('modal-tp2').textContent = formatPrice(stockData.targets.tp2) + ` (+${stockData.targets.tp2Pct}%)`;
+    document.getElementById('modal-sl').textContent = formatPrice(stockData.targets.sl) + ` (${stockData.targets.slPct}%)`;
   } else {
     document.getElementById('modal-tp1').textContent = 'N/A';
     document.getElementById('modal-tp2').textContent = 'N/A';
@@ -899,7 +903,7 @@ function renderScreenerResults(results) {
   if (countEl) countEl.textContent = results.length;
 
   if (results.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="13" class="empty-state">
+    tbody.innerHTML = `<tr><td colspan="14" class="empty-state">
       <div class="empty-icon">🔍</div>
       <div class="empty-title">Klik "Scan" untuk mulai screening</div>
       <div class="empty-text">Pilih preset dan threshold, lalu scan</div>
@@ -912,7 +916,7 @@ function renderScreenerResults(results) {
     const breakBadge = r.breakoutSignal === 'confirmed' ? 'badge-confirmed' :
       r.breakoutSignal === 'potential' ? 'badge-potential' : '';
     const volClass = r.volumeRatio >= 1.5 ? 'positive' : 'neutral';
-    const hasFib = r.fibonacci && r.fibonacci.tp1;
+    const hasTargets = r.targets && r.targets.tp1;
 
     return `<tr>
       <td class="ticker">${r.ticker}</td>
@@ -921,13 +925,14 @@ function renderScreenerResults(results) {
       <td>${formatPrice(r.ma10)}</td>
       <td>${formatPrice(r.ma20)}</td>
       <td><span class="badge ${compBadge}">${r.compressionRatio}%</span></td>
+      <td><span class="neutral">${r.bbBandwidth !== null ? r.bbBandwidth + '%' : '—'}</span></td>
       <td class="${volClass}">${r.volumeRatio}x</td>
       <td>${breakBadge ? `<span class="badge ${breakBadge}">${r.breakoutDirection} ${r.breakoutSignal}</span>` : '—'}</td>
       <td class="neutral">${r.rsi !== null ? r.rsi : '—'}</td>
       <td class="neutral">${r.macdHistogram !== null ? r.macdHistogram : '—'}</td>
-      <td class="positive">${hasFib ? formatPrice(r.fibonacci.tp1) + ' / ' + formatPrice(r.fibonacci.tp2) : '—'}</td>
-      <td class="negative">${hasFib ? formatPrice(r.fibonacci.sl) : '—'}</td>
-      <td>${hasFib && r.breakoutSignal !== 'none' ?
+      <td class="positive">${hasTargets ? formatPrice(r.targets.tp1) + ' / ' + formatPrice(r.targets.tp2) : '—'}</td>
+      <td class="negative">${hasTargets ? formatPrice(r.targets.sl) : '—'}</td>
+      <td>${hasTargets && r.breakoutSignal !== 'none' ?
         `<button class="btn btn-primary btn-sm" onclick='showTakeTradeModal(${JSON.stringify(r).replace(/'/g, "&#39;")})'>📈 Take</button>` :
         '<span class="neutral">—</span>'}
       </td>

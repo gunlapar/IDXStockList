@@ -384,8 +384,8 @@ function analyzeStock(ticker) {
 
   // 4. BOLLINGER BANDS SQUEEZE FILTER
   const bb = calcBollingerBands(closes, 20, 2);
-  if (!bb || bb.bandWidth > 0.15) { // Bandwidth > 15% means not a tight squeeze
-    return { ticker, error: 'Bollinger Bands not squeezing (>15%)', skip: true };
+  if (!bb || bb.bandWidth > 0.20) { // Bandwidth > 20% means not a squeeze
+    return { ticker, error: 'Bollinger Bands not squeezing (>20%)', skip: true };
   }
 
   // Compression ratio
