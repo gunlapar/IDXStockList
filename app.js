@@ -251,28 +251,73 @@ async function startScan() {
 
   // Mode: scan from spreadsheet (auto) or from hardcoded list
   if (preset === 'from-sheet') {
-    // Use scanAuto endpoint — reads tickers from sheet, auto-saves results
-    updateScanProgress(0, 100, 'Scanning from Ticker List sheet...');
+    // Step 1: Get ticker list from sheet
+    updateScanProgress(0, 100, 'Loading Ticker List dari spreadsheet...');
+    let sheetTickers = [];
     try {
-      const result = await apiGet('scanAuto', { threshold: threshold.toString() });
-
-      if (result.error) {
-        showToast(result.error, 'error');
-      } else if (result.results) {
-        App.screenerResults = result.results;
-        renderScreenerResults(result.results);
-        showToast(
-          `✅ Scan selesai: ${result.found} compressed dari ${result.total} saham. Auto-saved ke spreadsheet.`,
-          'success'
-        );
+      const tickerData = await apiGet('getTickerList');
+      if (tickerData.error || tickerData.count === 0) {
+        showToast(tickerData.message || 'Ticker list kosong. Scrape dulu!', 'error');
+        App.isScanning = false;
+        updateScanUI(false);
+        return;
       }
+      sheetTickers = tickerData.tickers;
     } catch (err) {
-      showToast('Scan error: ' + err.message, 'error');
+      showToast('Gagal load ticker list: ' + err.message, 'error');
+      App.isScanning = false;
+      updateScanUI(false);
+      return;
+    }
+
+    // Step 2: Batch scan (50 per batch, same as manual)
+    const batchSize = 50;
+    const allResults = [];
+    const allErrors = [];
+    App.scanTotal = sheetTickers.length;
+
+    for (let i = 0; i < sheetTickers.length; i += batchSize) {
+      if (!App.isScanning) break;
+
+      const batch = sheetTickers.slice(i, i + batchSize);
+      updateScanProgress(i, sheetTickers.length, `Scanning batch ${Math.floor(i/batchSize)+1}/${Math.ceil(sheetTickers.length/batchSize)}...`);
+
+      try {
+        const result = await apiGet('scan', {
+          tickers: batch.join(','),
+          threshold: threshold.toString()
+        });
+        if (result.results) {
+          allResults.push(...result.results);
+          App.screenerResults = allResults;
+          renderScreenerResults(allResults);
+        }
+        if (result.errors) allErrors.push(...result.errors);
+      } catch (err) {
+        console.error(`Batch error at ${i}:`, err);
+      }
+    }
+
+    // Step 3: Auto-save results to Screener Results sheet
+    if (allResults.length > 0 && App.isScanning) {
+      updateScanProgress(sheetTickers.length, sheetTickers.length, 'Saving results ke spreadsheet...');
+      try {
+        await apiGet('saveScreenerResults', {
+          results: JSON.stringify(allResults)
+        });
+      } catch (err) {
+        console.error('Failed to save results:', err);
+      }
     }
 
     App.isScanning = false;
+    App.screenerResults = allResults;
     updateScanUI(false);
-    updateScanProgress(100, 100, 'Scan complete!');
+    updateScanProgress(sheetTickers.length, sheetTickers.length, 'Scan complete!');
+    showToast(
+      `✅ Scan selesai: ${allResults.length} compressed dari ${sheetTickers.length} total. ${allErrors.length} error.`,
+      'success'
+    );
     setTimeout(() => {
       const pc = document.getElementById('scan-progress');
       if (pc) pc.classList.remove('visible');

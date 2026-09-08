@@ -74,6 +74,10 @@ function processRequest(action, params) {
       case 'updateStatus':
         result = updateTradeStatus(params.ticker, params.status);
         break;
+      case 'saveScreenerResults':
+        const jsonResults = params.results ? JSON.parse(params.results) : [];
+        result = saveScreenerResults(jsonResults);
+        break;
       default:
         result = { error: 'Unknown action: ' + action };
     }
