@@ -77,6 +77,11 @@ function processRequest(action, params) {
         const autoThreshold = parseFloat(params.threshold) || 5;
         result = scanFromSheet(autoThreshold);
         break;
+      case 'scan':
+        const scanTickers = params.tickers ? params.tickers.split(',') : [];
+        const scanThreshold = parseFloat(params.threshold) || 5;
+        result = scanStocks(scanTickers, scanThreshold);
+        break;
       case 'addTrade':
         result = addTrade(params);
         break;
@@ -1289,7 +1294,7 @@ function scrapeCorpActions() {
   }
 
   // Save to sheet
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sheet = ss.getSheetByName('Corp Actions');
   if (!sheet) {
     sheet = ss.insertSheet('Corp Actions');
@@ -1333,7 +1338,7 @@ function formatDateStr(dateStr) {
 }
 
 function getCorpActions() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = ss.getSheetByName('Corp Actions');
   if (!sheet) return { actions: [] };
 
