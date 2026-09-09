@@ -548,9 +548,9 @@ async function confirmTakeTrade() {
     const result = await apiGet('addTrade', {
       ticker: stockData.ticker,
       buyPrice: stockData.close.toString(),
-      tp1: stockData.fibonacci ? stockData.fibonacci.tp1.toString() : '0',
-      tp2: stockData.fibonacci ? stockData.fibonacci.tp2.toString() : '0',
-      cl: stockData.fibonacci ? stockData.fibonacci.sl.toString() : '0',
+      tp1: stockData.targets ? stockData.targets.tp1.toString() : '0',
+      tp2: stockData.targets ? stockData.targets.tp2.toString() : '0',
+      cl: stockData.targets ? stockData.targets.sl.toString() : '0',
     });
     if (result.success) {
       showToast(`✅ Trade ${stockData.ticker} ditambahkan ke Running`, 'success');
