@@ -674,7 +674,10 @@ function addTrade(params) {
     clPct,            // POTENTIAL CL
     'Running',        // STATUS
     trade.buyPrice,   // CURRENT PRICE (initially = buy price)
-    '0,00%'           // FLOATING PNL
+    '0,00%',          // FLOATING PNL
+    trade.volRatio || '', // VOL RATIO
+    trade.compress || '', // COMPRESSION %
+    trade.breakout || ''  // BREAKOUT STATUS
   ];
 
   sheet.appendRow(newRow);
@@ -735,8 +738,8 @@ function checkAndUpdateTrades() {
       doneRow[11] = newStatus;
       doneRow[12] = currentPrice;
 
-      // Append to Done sheet
-      doneSheet.appendRow(doneRow.slice(0, 14));
+      // Append to Done sheet (slice 17 columns to include VolRatio, Compress, Breakout)
+      doneSheet.appendRow(doneRow.slice(0, 17));
 
       rowsToDelete.push(sheetRow);
       updated.push({ ticker, newStatus, currentPrice, buyPrice });

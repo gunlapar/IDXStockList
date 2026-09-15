@@ -607,6 +607,9 @@ async function confirmTakeTrade() {
       tp1: stockData.targets ? stockData.targets.tp1.toString() : '0',
       tp2: stockData.targets ? stockData.targets.tp2.toString() : '0',
       cl: stockData.targets ? stockData.targets.sl.toString() : '0',
+      volRatio: stockData.volumeRatio ? stockData.volumeRatio.toString() : '0',
+      compress: stockData.compressionRatio ? stockData.compressionRatio.toString() : '0',
+      breakout: ((stockData.breakoutDirection || '') + ' ' + (stockData.breakoutSignal || 'none')).trim()
     });
     if (result.success) {
       showToast(`[OK] Trade ${stockData.ticker} ditambahkan ke Running`, 'success');
