@@ -139,11 +139,12 @@ async function apiGet(action, params = {}) {
     throw new Error('API URL not set');
   }
 
-  const url = new URL(App.apiUrl);
-  url.searchParams.set('action', action);
-  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-
-  const response = await fetch(url.toString());
+  // Gunakan POST (text/plain) untuk semua request agar tidak kena block redirect Safari (ITP/CORS) di iOS.
+  const response = await fetch(App.apiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action, ...params }),
+  });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
 }
@@ -156,7 +157,7 @@ async function apiPost(action, body = {}) {
 
   const response = await fetch(App.apiUrl, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ action, ...body }),
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
