@@ -673,6 +673,7 @@ function renderDashboard(data) {
   // Render charts
   renderDistributionChart(d);
   renderEquityCurve(data);
+  renderFilterAnalysis(d.filterStats);
 }
 
 function setStatValue(id, value, className) {
@@ -903,6 +904,37 @@ function renderEquityCurve(data) {
   ctx.font = '10px JetBrains Mono';
   ctx.textAlign = 'center';
   ctx.fillText('Trades ->', w / 2, h - 4);
+}
+
+function renderFilterAnalysis(filterStats) {
+  const container = document.getElementById('filter-analysis');
+  if (!container || !filterStats) return;
+
+  const createCard = (title, data) => {
+    let html = `<div style="flex:1; min-width: 200px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); padding: var(--space-sm); border-radius: 4px;">
+      <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px;">[ ${title} ]</div>`;
+    
+    for (const [key, stats] of Object.entries(data)) {
+      if (stats.count === 0) continue;
+      const winRate = ((stats.win / stats.count) * 100).toFixed(1);
+      const color = winRate >= 50 ? 'var(--accent-green)' : 'var(--accent-red)';
+      html += `<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 0.85rem;">
+        <span style="text-transform: capitalize;">${key}</span>
+        <span style="color: ${color}; font-weight: bold;">${winRate}% <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: normal;">(${stats.win}/${stats.count})</span></span>
+      </div>`;
+    }
+    html += `</div>`;
+    return html;
+  };
+
+  let hasData = false;
+  let html = '';
+  
+  if (Object.values(filterStats.breakout).some(s => s.count > 0)) { html += createCard('BREAKOUT', filterStats.breakout); hasData = true; }
+  if (Object.values(filterStats.compression).some(s => s.count > 0)) { html += createCard('COMPRESSION', filterStats.compression); hasData = true; }
+  if (Object.values(filterStats.volume).some(s => s.count > 0)) { html += createCard('VOL RATIO', filterStats.volume); hasData = true; }
+
+  container.innerHTML = hasData ? html : `<div style="flex:1; min-width: 200px; font-family: monospace; font-size: 0.8rem; color: var(--text-muted);">Belum ada data filter trade yang selesai.</div>`;
 }
 
 // ============================================================
