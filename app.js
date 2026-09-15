@@ -272,8 +272,10 @@ async function startScan() {
 
   const presetEl = document.getElementById('scan-preset');
   const thresholdEl = document.getElementById('scan-threshold');
+  const volRatioEl = document.getElementById('scan-vol-ratio');
   const preset = presetEl ? presetEl.value : 'all';
   const threshold = thresholdEl ? parseFloat(thresholdEl.value) : 5;
+  const minVolRatio = volRatioEl ? parseFloat(volRatioEl.value) : 1.5;
 
   App.isScanning = true;
   App.screenerResults = [];
@@ -318,7 +320,8 @@ async function startScan() {
       try {
         const result = await apiGet('scan', {
           tickers: batch.join(','),
-          threshold: threshold.toString()
+          threshold: threshold.toString(),
+          minVolRatio: minVolRatio.toString()
         });
         if (result.results) {
           allResults.push(...result.results);
@@ -383,7 +386,8 @@ async function startScan() {
     try {
       const result = await apiGet('scan', {
         tickers: batch.join(','),
-        threshold: threshold.toString()
+        threshold: threshold.toString(),
+        minVolRatio: minVolRatio.toString()
       });
 
       if (result.results) {

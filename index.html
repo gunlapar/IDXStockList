@@ -160,11 +160,24 @@
         <div class="toolbar-group">
           <span class="toolbar-label">Max Compression:</span>
           <select class="input" id="scan-threshold">
+            <option value="1.5">≤ 1.5% (Ultra)</option>
             <option value="2">≤ 2% (Strong)</option>
             <option value="3">≤ 3%</option>
             <option value="5" selected>≤ 5% (Default)</option>
             <option value="7">≤ 7%</option>
             <option value="10">≤ 10%</option>
+          </select>
+        </div>
+
+        <div class="toolbar-separator"></div>
+
+        <div class="toolbar-group">
+          <span class="toolbar-label">Min Vol Ratio:</span>
+          <select class="input" id="scan-vol-ratio">
+            <option value="0">Semua (No Filter)</option>
+            <option value="1">≥ 1.0x</option>
+            <option value="1.5" selected>≥ 1.5x (Recommended)</option>
+            <option value="2">≥ 2.0x</option>
           </select>
         </div>
 

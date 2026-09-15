@@ -40,7 +40,8 @@ function processRequest(action, params) {
       case 'scan':
         const tickers = params.tickers ? params.tickers.split(',') : null;
         const threshold = parseFloat(params.threshold) || 5;
-        result = scanStocks(tickers, threshold);
+        const minVolRatio = parseFloat(params.minVolRatio) || 0;
+        result = scanStocks(tickers, threshold, minVolRatio);
         break;
       case 'getPrice':
         result = getStockData(params.ticker, parseInt(params.days) || 60);
@@ -75,12 +76,14 @@ function processRequest(action, params) {
         break;
       case 'scanAuto':
         const autoThreshold = parseFloat(params.threshold) || 5;
-        result = scanFromSheet(autoThreshold);
+        const autoMinVolRatio = parseFloat(params.minVolRatio) || 1.5; // default 1.5x for auto
+        result = scanFromSheet(autoThreshold, autoMinVolRatio);
         break;
       case 'scan':
         const scanTickers = params.tickers ? params.tickers.split(',') : [];
         const scanThreshold = parseFloat(params.threshold) || 5;
-        result = scanStocks(scanTickers, scanThreshold);
+        const scanMinVolRatio = parseFloat(params.minVolRatio) || 0;
+        result = scanStocks(scanTickers, scanThreshold, scanMinVolRatio);
         break;
       case 'addTrade':
         result = addTrade(params);
@@ -488,7 +491,7 @@ function analyzeStock(ticker) {
 /**
  * Scan multiple stocks for compression
  */
-function scanStocks(tickers, threshold) {
+function scanStocks(tickers, threshold, minVolRatio = 0) {
   if (!tickers || tickers.length === 0) {
     return { error: 'No tickers provided' };
   }
@@ -514,7 +517,7 @@ function scanStocks(tickers, threshold) {
       const analysis = analyzeStock(ticker);
       if (analysis.skip) {
         errors.push({ ticker, error: analysis.error });
-      } else if (analysis.compressionRatio <= threshold) {
+      } else if (analysis.compressionRatio <= threshold && analysis.volumeRatio >= minVolRatio) {
         // Check for Corp Actions
         if (corpActionsMap[ticker]) {
           const upcoming = corpActionsMap[ticker].filter(a => new Date(a.exDate) > now);
@@ -948,7 +951,7 @@ function continueScan() {
   
   if (batch.length > 0) {
     // Process batch (fetch from API and save to sheet)
-    const result = scanStocks(batch, 5); // Default threshold 5%
+    const result = scanStocks(batch, 5, 0); // Default threshold 5%, 0 minVolRatio for scheduled scan
     
     // Write results immediately to the Screener sheet
     if (result.results && result.results.length > 0) {
@@ -1178,7 +1181,7 @@ function getTickerListFromSheet() {
  * Scan using tickers from the spreadsheet (auto mode)
  * Results are automatically saved to "Screener Results" sheet
  */
-function scanFromSheet(threshold) {
+function scanFromSheet(threshold, minVolRatio = 0) {
   // Read tickers from sheet
   const tickerData = getTickerListFromSheet();
   if (tickerData.count === 0) {
@@ -1186,7 +1189,7 @@ function scanFromSheet(threshold) {
   }
 
   // Run scan
-  const result = scanStocks(tickerData.tickers, threshold);
+  const result = scanStocks(tickerData.tickers, threshold, minVolRatio);
 
   // Auto-save results to Screener Results sheet
   if (result.results && result.results.length > 0) {
