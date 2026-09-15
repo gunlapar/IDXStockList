@@ -680,7 +680,8 @@ function addTrade(params) {
     trade.breakout || ''  // BREAKOUT STATUS
   ];
 
-  sheet.appendRow(newRow);
+  const lastRow = sheet.getLastRow();
+  sheet.getRange(lastRow + 1, 1, 1, newRow.length).setValues([newRow]);
 
   return { success: true, trade: { no: nextNo, ...trade } };
 }
@@ -739,7 +740,9 @@ function checkAndUpdateTrades() {
       doneRow[12] = currentPrice;
 
       // Append to Done sheet (slice 17 columns to include VolRatio, Compress, Breakout)
-      doneSheet.appendRow(doneRow.slice(0, 17));
+      const doneArray = doneRow.slice(0, 17);
+      const doneLastRow = doneSheet.getLastRow();
+      doneSheet.getRange(doneLastRow + 1, 1, 1, doneArray.length).setValues([doneArray]);
 
       rowsToDelete.push(sheetRow);
       updated.push({ ticker, newStatus, currentPrice, buyPrice });
