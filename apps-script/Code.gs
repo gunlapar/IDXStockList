@@ -1289,7 +1289,8 @@ function scrapeCorpActions() {
 
   const requests = endpoints.map(ep => {
     const targetUrl = 'https://www.idx.co.id/primary/CorporateAction/' + ep.path;
-    const proxyUrl = 'https://api.scraperapi.com/?api_key=' + apiKey + '&url=' + encodeURIComponent(targetUrl);
+    // Tambahkan premium=true agar menggunakan Residential Proxy (lebih cepat tembus Cloudflare)
+    const proxyUrl = 'https://api.scraperapi.com/?api_key=' + apiKey + '&premium=true&url=' + encodeURIComponent(targetUrl);
     return {
       url: proxyUrl,
       muteHttpExceptions: true
