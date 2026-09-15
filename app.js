@@ -533,14 +533,19 @@ function updateScanUI(scanning) {
 
 function updateScanProgress(current, total, text) {
   const container = document.getElementById('scan-progress');
-  const fill = document.getElementById('scan-progress-fill');
-  const label = document.getElementById('scan-progress-label');
-  const count = document.getElementById('scan-progress-count');
+  const textEl = document.getElementById('scan-progress-text');
 
   if (container) container.classList.add('visible');
-  if (fill) fill.style.width = `${(current / total * 100).toFixed(1)}%`;
-  if (label) label.textContent = text || 'Scanning...';
-  if (count) count.textContent = `${current}/${total}`;
+  
+  if (textEl) {
+    const pct = Math.floor((current / total) * 100);
+    const barsCount = Math.floor(pct / 5); // 20 blocks max
+    const filled = '█'.repeat(barsCount);
+    const empty = '░'.repeat(20 - barsCount);
+    
+    // e.g. > Scanning batch 1... [████████░░░░░░░░░░░░] 40% (4/10)
+    textEl.textContent = `> ${text || 'Scanning...'} [${filled}${empty}] ${pct}% (${current}/${total})`;
+  }
 }
 
 // ============================================================
