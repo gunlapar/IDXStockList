@@ -9,22 +9,22 @@
    ============================================================ */
 :root {
   /* Bloomberg Dark Palette */
-  --bg-primary: #0a0a0f;
-  --bg-secondary: #0f1018;
-  --bg-panel: #141520;
-  --bg-panel-hover: #1a1b2e;
-  --bg-card: #181928;
-  --bg-input: #12131f;
-  --bg-row-even: #12131f;
-  --bg-row-odd: #161726;
-  --bg-row-hover: #1e2038;
+  --bg-primary: #000000;
+  --bg-secondary: #000000;
+  --bg-panel: #000000;
+  --bg-panel-hover: #111111;
+  --bg-card: #000000;
+  --bg-input: #000000;
+  --bg-row-even: #000000;
+  --bg-row-odd: #0a0a0a;
+  --bg-row-hover: #111111;
 
   /* Accent Colors */
-  --accent-green: #00d4aa;
-  --accent-green-dim: #00a884;
+  --accent-green: #00ff00;
+  --accent-green-dim: #00cc00;
   --accent-green-bg: rgba(0, 212, 170, 0.08);
-  --accent-red: #ff4757;
-  --accent-red-dim: #cc3945;
+  --accent-red: #ff0000;
+  --accent-red-dim: #cc0000;
   --accent-red-bg: rgba(255, 71, 87, 0.08);
   --accent-orange: #ffa502;
   --accent-orange-bg: rgba(255, 165, 2, 0.08);
@@ -35,16 +35,16 @@
   --accent-purple: #a855f7;
 
   /* Text Colors */
-  --text-primary: #e8e8ee;
-  --text-secondary: #8b8ca0;
-  --text-muted: #5a5b6e;
-  --text-bright: #ffffff;
-  --text-green: #00d4aa;
-  --text-red: #ff4757;
+  --text-primary: #ffb000;
+  --text-secondary: #cccccc;
+  --text-muted: #888888;
+  --text-bright: #ffb000;
+  --text-green: #00ff00;
+  --text-red: #ff0000;
 
   /* Borders */
-  --border-primary: #1e1f32;
-  --border-secondary: #282940;
+  --border-primary: #333333;
+  --border-secondary: #555555;
   --border-focus: #3742fa;
 
   /* Shadows */
@@ -62,10 +62,10 @@
   --space-2xl: 48px;
 
   /* Border Radius */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
 
   /* Transitions */
   --transition-fast: 150ms ease;
@@ -74,7 +74,7 @@
 
   /* Font */
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sans: var(--font-mono);
 }
 
 /* ============================================================

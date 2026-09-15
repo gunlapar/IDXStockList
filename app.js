@@ -1,12 +1,12 @@
 // ============================================================
-// SahamCompress — Main Application Logic
+// SahamCompress - Main Application Logic
 // ============================================================
 
 // ============================================================
 // APP STATE
 // ============================================================
 const App = {
-  // Google Apps Script deployment URL — user must set this
+  // Google Apps Script deployment URL - user must set this
   apiUrl: localStorage.getItem('sahamcompress_api_url') || 'https://script.google.com/macros/s/AKfycbzWkCz4ySe3wh0PfzYM1e0eJHvxxvymJ39Y0cEakEHxAg5nw7ke-YcrACCI6xOTihke1w/exec',
 
   // Current tab
@@ -231,7 +231,7 @@ async function checkTrades() {
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = '🔄 Check TP/SL';
+      btn.innerHTML = '[ CHECK TP/SL ]';
     }
   }
 }
@@ -246,9 +246,9 @@ async function enableAutoPilot() {
   try {
     const result = await apiGet('setupAutoPilot');
     if (result.success) {
-      showToast('✅ Auto-Pilot berhasil diaktifkan! Server akan menscan 900 saham setiap jam 16:30 dan mengecek TP/SL setiap jam bursa.', 'success');
+      showToast('[OK] Auto-Pilot berhasil diaktifkan! Server akan menscan 900 saham setiap jam 16:30 dan mengecek TP/SL setiap jam bursa.', 'success');
       if (btn) {
-        btn.innerHTML = '✅ Auto-Pilot Active';
+        btn.innerHTML = '[ AUTO-PILOT ACTIVE ]';
         btn.classList.add('btn-success');
       }
     } else {
@@ -258,7 +258,7 @@ async function enableAutoPilot() {
     showToast('Gagal mengaktifkan Auto-Pilot: ' + err.message, 'error');
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = '🚀 Enable Auto-Pilot';
+      btn.innerHTML = '[ ENABLE AUTO-PILOT ]';
     }
   }
 }
@@ -351,7 +351,7 @@ async function startScan() {
     updateScanUI(false);
     updateScanProgress(sheetTickers.length, sheetTickers.length, 'Scan complete!');
     showToast(
-      `✅ Scan selesai: ${allResults.length} compressed dari ${sheetTickers.length} total. ${allErrors.length} error.`,
+      `[OK] Scan selesai: ${allResults.length} compressed dari ${sheetTickers.length} total. ${allErrors.length} error.`,
       'success'
     );
     setTimeout(() => {
@@ -436,7 +436,7 @@ async function scrapeTickers() {
     if (result.error) {
       showToast('Scrape gagal: ' + result.error, 'error');
     } else {
-      showToast(`✅ ${result.count} ticker IDX berhasil di-scrape & disimpan ke spreadsheet!`, 'success');
+      showToast(`[OK] ${result.count} ticker IDX berhasil di-scrape & disimpan ke spreadsheet!`, 'success');
       // Update ticker count display
       const countEl = document.getElementById('ticker-count');
       if (countEl) countEl.textContent = result.count + ' tickers';
@@ -446,7 +446,7 @@ async function scrapeTickers() {
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = '🌐 Scrape IDX Tickers';
+      btn.innerHTML = '[ SCRAPE IDX TICKERS ]';
     }
   }
 }
@@ -459,7 +459,7 @@ async function loadTickerCount() {
     const result = await apiGet('getTickerList');
     const countEl = document.getElementById('ticker-count');
     if (countEl) {
-      countEl.textContent = result.count > 0 ? result.count + ' tickers' : 'Empty — scrape first';
+      countEl.textContent = result.count > 0 ? result.count + ' tickers' : 'Empty - scrape first';
     }
   } catch (err) {
     // ignore
@@ -504,11 +504,11 @@ function showTakeTradeModal(stockData) {
   document.getElementById('modal-price').textContent = formatPrice(stockData.close);
   document.getElementById('modal-compression').textContent = stockData.compressionRatio + '%';
   document.getElementById('modal-breakout').textContent =
-    stockData.breakoutSignal === 'confirmed' ? '✅ Confirmed' :
-      stockData.breakoutSignal === 'potential' ? '⚡ Potential' : '—';
+    stockData.breakoutSignal === 'confirmed' ? '[▲ CONF]' :
+      stockData.breakoutSignal === 'potential' ? '[▲ POT]' : '-';
   
   if (document.getElementById('modal-bb')) {
-    document.getElementById('modal-bb').textContent = stockData.bbBandwidth ? stockData.bbBandwidth + '%' : '—';
+    document.getElementById('modal-bb').textContent = stockData.bbBandwidth ? stockData.bbBandwidth + '%' : '-';
   }
 
   if (stockData.targets) {
@@ -557,7 +557,7 @@ async function confirmTakeTrade() {
       cl: stockData.targets ? stockData.targets.sl.toString() : '0',
     });
     if (result.success) {
-      showToast(`✅ Trade ${stockData.ticker} ditambahkan ke Running`, 'success');
+      showToast(`[OK] Trade ${stockData.ticker} ditambahkan ke Running`, 'success');
       closeTakeTradeModal();
       await loadRunningTrades();
     } else {
@@ -569,13 +569,13 @@ async function confirmTakeTrade() {
     modal.dataset.processing = 'false';
     if (confirmBtn) {
       confirmBtn.disabled = false;
-      confirmBtn.innerHTML = '✅ Confirm Trade';
+      confirmBtn.innerHTML = '[ CONFIRM TRADE ]';
     }
   }
 }
 
 // ============================================================
-// RENDERING — DASHBOARD
+// RENDERING - DASHBOARD
 // ============================================================
 
 function renderDashboard(data) {
@@ -626,7 +626,7 @@ function setStatDetail(id, text) {
 }
 
 // ============================================================
-// RENDERING — CHARTS (Canvas-based, no external library)
+// RENDERING - CHARTS (Canvas-based, no external library)
 // ============================================================
 
 function renderDistributionChart(doneData) {
@@ -835,11 +835,11 @@ function renderEquityCurve(data) {
   ctx.fillStyle = '#5a5b6e';
   ctx.font = '10px JetBrains Mono';
   ctx.textAlign = 'center';
-  ctx.fillText('Trades →', w / 2, h - 4);
+  ctx.fillText('Trades ->', w / 2, h - 4);
 }
 
 // ============================================================
-// RENDERING — TABLES
+// RENDERING - TABLES
 // ============================================================
 
 function renderRunningTrades(trades) {
@@ -848,7 +848,7 @@ function renderRunningTrades(trades) {
 
   if (trades.length === 0) {
     tbody.innerHTML = `<tr><td colspan="12" class="empty-state">
-      <div class="empty-icon">📭</div>
+      <div class="empty-icon">[ EMPTY ]</div>
       <div class="empty-title">Tidak ada trade aktif</div>
       <div class="empty-text">Gunakan Screener untuk mencari peluang</div>
     </td></tr>`;
@@ -871,9 +871,9 @@ function renderRunningTrades(trades) {
       <td class="negative">${formatPrice(t.cl)}</td>
       <td>${formatPrice(t.currentPrice)}</td>
       <td class="${pnlClass}">${t.floatingPnl || '0%'}</td>
-      <td><span class="badge badge-running">● Running</span></td>
+      <td><span class="badge badge-running">RUNNING</span></td>
       <td>${t.potentialTP1 || ''}</td>
-      <td>${nearSL ? '⚠️ Near SL' : ''}</td>
+      <td>${nearSL ? '[! NEAR SL]' : ''}</td>
     </tr>`;
   }).join('');
 
@@ -888,7 +888,7 @@ function renderDoneTrades(trades, stats) {
 
   if (trades.length === 0) {
     tbody.innerHTML = `<tr><td colspan="11" class="empty-state">
-      <div class="empty-icon">📋</div>
+      <div class="empty-icon">[ EMPTY ]</div>
       <div class="empty-title">Belum ada trade selesai</div>
     </td></tr>`;
     return;
@@ -941,7 +941,7 @@ function renderScreenerResults(results) {
 
   if (results.length === 0) {
     tbody.innerHTML = `<tr><td colspan="14" class="empty-state">
-      <div class="empty-icon">🔍</div>
+      <div class="empty-icon">[ EMPTY ]</div>
       <div class="empty-title">Klik "Scan" untuk mulai screening</div>
       <div class="empty-text">Pilih preset dan threshold, lalu scan</div>
     </td></tr>`;
@@ -963,16 +963,16 @@ function renderScreenerResults(results) {
       <td>${formatPrice(r.ma10)}</td>
       <td>${formatPrice(r.ma20)}</td>
       <td><span class="badge ${compBadge}">${r.compressionRatio}%</span></td>
-      <td><span class="neutral">${r.bbBandwidth !== null ? r.bbBandwidth + '%' : '—'}</span></td>
+      <td><span class="neutral">${r.bbBandwidth !== null ? r.bbBandwidth + '%' : '-'}</span></td>
       <td class="${volClass}">${r.volumeRatio}x</td>
-      <td>${breakBadge ? `<span class="badge ${breakBadge}">${r.breakoutDirection} ${r.breakoutSignal}</span>` : '—'}</td>
-      <td class="neutral">${r.rsi !== null ? r.rsi : '—'}</td>
-      <td class="neutral">${r.macdHistogram !== null ? r.macdHistogram : '—'}</td>
-      <td class="positive">${hasTargets ? formatPrice(r.targets.tp1) + ' / ' + formatPrice(r.targets.tp2) : '—'}</td>
-      <td class="negative">${hasTargets ? formatPrice(r.targets.sl) : '—'}</td>
+      <td>${breakBadge ? `<span class="badge ${breakBadge}">${r.breakoutDirection} ${r.breakoutSignal}</span>` : '-'}</td>
+      <td class="neutral">${r.rsi !== null ? r.rsi : '-'}</td>
+      <td class="neutral">${r.macdHistogram !== null ? r.macdHistogram : '-'}</td>
+      <td class="positive">${hasTargets ? formatPrice(r.targets.tp1) + ' / ' + formatPrice(r.targets.tp2) : '-'}</td>
+      <td class="negative">${hasTargets ? formatPrice(r.targets.sl) : '-'}</td>
       <td>${hasTargets && r.breakoutSignal !== 'none' ?
-        `<button class="btn btn-primary btn-sm" onclick='showTakeTradeModal(${JSON.stringify(r).replace(/'/g, "&#39;")})'>📈 Take</button>` :
-        '<span class="neutral">—</span>'}
+        `<button class="btn btn-primary btn-sm" onclick='showTakeTradeModal(${JSON.stringify(r).replace(/'/g, "&#39;")})'>[ BUY ]</button>` :
+        '<span class="neutral">-</span>'}
       </td>
     </tr>`;
   }).join('');
@@ -1089,14 +1089,14 @@ function filterDoneTrades(status) {
 // ============================================================
 
 function formatPrice(val) {
-  if (!val && val !== 0) return '—';
+  if (!val && val !== 0) return '-';
   const num = typeof val === 'number' ? val : parseFloat(val);
   if (isNaN(num)) return val;
   return num.toLocaleString('id-ID');
 }
 
 function formatDate(val) {
-  if (!val) return '—';
+  if (!val) return '-';
   if (val instanceof Date) {
     return val.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
   }
@@ -1150,7 +1150,7 @@ function showToast(message, type = 'info') {
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
 
-  const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+  const icons = { success: '[OK]', error: '[ERR]', info: '[INFO]' };
   toast.innerHTML = `<span>${icons[type] || ''}</span> ${message}`;
 
   container.appendChild(toast);
@@ -1216,7 +1216,7 @@ async function fetchCorpActions(forceSync = false) {
   if (!tbody) return;
 
   if (forceSync) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">🔄 Syncing from IDX...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">[ SYNCING FROM IDX... ]</td></tr>';
     try {
       await apiGet('scrapeCorpActions');
       showToast('Berhasil sync Corporate Actions dari IDX', 'success');
