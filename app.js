@@ -1057,6 +1057,8 @@ function renderScreenerResults(results) {
       r.breakoutSignal === 'potential' ? 'badge-potential' : '';
     const volClass = r.volumeRatio >= 1.5 ? 'positive' : 'neutral';
     const hasTargets = r.targets && r.targets.tp1;
+    const canBuy = hasTargets && r.breakoutDirection === 'bullish' &&
+      ['potential', 'confirmed'].includes(r.breakoutSignal) && r.volumeRatio >= 1.5;
     const corpWarning = r.corpActionWarning ? `<br><span class="badge badge-sl" style="font-size:0.6rem;margin-top:4px">${r.corpActionWarning}</span>` : '';
 
     return `<tr>
@@ -1073,7 +1075,7 @@ function renderScreenerResults(results) {
       <td class="neutral">${r.macdHistogram !== null ? r.macdHistogram : '-'}</td>
       <td class="positive">${hasTargets ? formatPrice(r.targets.tp1) + ' / ' + formatPrice(r.targets.tp2) : '-'}</td>
       <td class="negative">${hasTargets ? formatPrice(r.targets.sl) : '-'}</td>
-      <td>${hasTargets && r.breakoutSignal !== 'none' ?
+      <td>${canBuy ?
         `<button class="btn btn-primary btn-sm" onclick='showTakeTradeModal(${JSON.stringify(r).replace(/'/g, "&#39;")})'>[ BUY ]</button>` :
         '<span class="neutral">-</span>'}
       </td>
