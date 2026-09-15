@@ -1,5 +1,5 @@
 // ============================================================
-// SahamCompress — Google Apps Script Backend
+// IDXBintangPagi — Google Apps Script Backend
 // Deploy sebagai Web App: Publish → Deploy as Web App
 // URL akan dipakai oleh frontend sebagai API endpoint
 // ============================================================
@@ -35,7 +35,7 @@ function processRequest(action, params) {
   try {
     switch (action) {
       case 'ping':
-        result = { status: 'ok', message: 'SahamCompress API is running' };
+        result = { status: 'ok', message: 'IDXBintangPagi API is running' };
         break;
       case 'scan':
         const tickers = params.tickers ? params.tickers.split(',') : null;

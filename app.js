@@ -1,5 +1,5 @@
 // ============================================================
-// SahamCompress - Main Application Logic
+// IDXBintangPagi - Main Application Logic
 // ============================================================
 
 // ============================================================
@@ -7,7 +7,7 @@
 // ============================================================
 const App = {
   // Google Apps Script deployment URL - user must set this
-  apiUrl: localStorage.getItem('sahamcompress_api_url') || 'https://script.google.com/macros/s/AKfycbzWkCz4ySe3wh0PfzYM1e0eJHvxxvymJ39Y0cEakEHxAg5nw7ke-YcrACCI6xOTihke1w/exec',
+  apiUrl: localStorage.getItem('idxbintangpagi_api_url') || localStorage.getItem('sahamcompress_api_url') || 'https://script.google.com/macros/s/AKfycbzWkCz4ySe3wh0PfzYM1e0eJHvxxvymJ39Y0cEakEHxAg5nw7ke-YcrACCI6xOTihke1w/exec',
 
   // Current tab
   activeTab: 'dashboard',
@@ -103,6 +103,7 @@ function initApiUrl() {
         input.value = url;
       }
       App.apiUrl = url;
+      localStorage.setItem('idxbintangpagi_api_url', url);
       localStorage.setItem('sahamcompress_api_url', url);
       showToast('API URL tersimpan', 'success');
       refreshAllData();
