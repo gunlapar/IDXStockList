@@ -68,7 +68,23 @@ function switchTab(tabName) {
   // Update panels
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById(`panel-${tabName}`)?.classList.add('active');
+
+  // Redraw charts if dashboard is shown, fixing canvas stretch issues
+  if (tabName === 'dashboard' && App.dashboardData) {
+    setTimeout(() => {
+      renderDistributionChart(App.dashboardData.done || {});
+      renderEquityCurve(App.dashboardData);
+    }, 10);
+  }
 }
+
+// Ensure charts resize correctly on window resize
+window.addEventListener('resize', () => {
+  if (App.activeTab === 'dashboard' && App.dashboardData) {
+    renderDistributionChart(App.dashboardData.done || {});
+    renderEquityCurve(App.dashboardData);
+  }
+});
 
 function initClock() {
   const updateClock = () => {
