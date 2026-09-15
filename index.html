@@ -18,7 +18,7 @@
        ============================================================ -->
   <header class="header">
     <div class="header-brand">
-      <div class="logo">IDX<span>BINTANGPAGI</span></div>
+      <div class="logo">IDX <span>BINTANGPAGI</span></div>
     </div>
     <div class="header-status">
       <div class="status-indicator">
@@ -368,13 +368,9 @@
          ======================================== -->
     <section class="tab-panel" id="panel-corp-actions">
       <div class="table-container">
-        <div class="table-header">
-          <div class="table-title">
-            UPCOMING DIVIDENDS
-          </div>
-          <div class="table-actions">
-            <button class="btn btn-primary btn-sm" onclick="fetchCorpActions(true)">[ SYNC IDX API ]</button>
-          </div>
+        <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h2 style="margin: 0; color: var(--color-warning);">UPCOMING CORPORATE ACTIONS</h2>
+          <button class="btn btn-success" onclick="fetchCorpActions(true)">[ SYNC IDX API ]</button>
         </div>
         <div class="table-wrapper">
           <table>

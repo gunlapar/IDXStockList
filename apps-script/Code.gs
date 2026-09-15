@@ -4,7 +4,7 @@
 // URL akan dipakai oleh frontend sebagai API endpoint
 // ============================================================
 
-const SPREADSHEET_ID = '1fp5r3tFS1He7FJuZUqgK-eGppcyeuFX9vY3U5TbkFlQ';
+const SPREADSHEET_ID = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
 const SHEET_RUNNING = 'Running';
 const SHEET_DONE = 'DONE TP SL';
 const SHEET_TICKERS = 'Ticker List';
@@ -1274,34 +1274,60 @@ function saveScreenerResults(results) {
  */
 function scrapeCorpActions() {
   let actions = [];
+  const apiKey = PropertiesService.getScriptProperties().getProperty('SCRAPER_API_KEY');
   
-  try {
-    const url = 'https://www.idx.co.id/primary/CorporateAction/GetDividend?start=0&length=100';
-    
-    const response = UrlFetchApp.fetch(url, {
-      muteHttpExceptions: true,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
-        'Referer': 'https://www.idx.co.id/'
+  function fetchIdx(path) {
+    const targetUrl = 'https://www.idx.co.id/primary/CorporateAction/' + path;
+    const proxyUrl = 'https://api.scraperapi.com/?api_key=' + apiKey + '&url=' + encodeURIComponent(targetUrl);
+    try {
+      const res = UrlFetchApp.fetch(proxyUrl, { muteHttpExceptions: true });
+      if (res.getResponseCode() === 200) {
+        return JSON.parse(res.getContentText());
       }
-    });
+    } catch(e) { console.error('Error fetching ' + path, e); }
+    return null;
+  }
 
-    if (response.getResponseCode() === 200) {
-      const data = JSON.parse(response.getContentText());
-      if (data && data.data) {
-        actions = data.data.map(item => ({
-          ticker: item.StockCode,
-          type: 'Cash Dividend',
-          amount: item.DividendPerShare,
-          cumDate: item.CumDate,
-          exDate: item.ExDate,
-          recordingDate: item.RecordingDate,
-          paymentDate: item.PaymentDate
-        }));
-      }
-    }
-  } catch (err) {
-    console.error('Failed to fetch from IDX:', err);
+  // 1. DIVIDEND
+  const divData = fetchIdx('GetDividend?start=0&length=100');
+  if (divData && divData.data) {
+    actions = actions.concat(divData.data.map(item => ({
+      ticker: item.StockCode,
+      type: 'Cash Dividend',
+      amount: item.DividendPerShare || '-',
+      cumDate: item.CumDate,
+      exDate: item.ExDate,
+      recordingDate: item.RecordingDate,
+      paymentDate: item.PaymentDate
+    })));
+  }
+
+  // 2. STOCK SPLIT
+  const splitData = fetchIdx('GetStockSplit?start=0&length=100');
+  if (splitData && splitData.data) {
+    actions = actions.concat(splitData.data.map(item => ({
+      ticker: item.StockCode,
+      type: 'Stock Split',
+      amount: item.Ratio || item.SplitRatio || '-',
+      cumDate: item.CumDate || item.CumDateRegular,
+      exDate: item.ExDate || item.ExDateRegular,
+      recordingDate: item.RecordingDate,
+      paymentDate: item.PaymentDate || '-'
+    })));
+  }
+
+  // 3. RIGHT ISSUE
+  const rightData = fetchIdx('GetRightIssue?start=0&length=100');
+  if (rightData && rightData.data) {
+    actions = actions.concat(rightData.data.map(item => ({
+      ticker: item.StockCode,
+      type: 'Right Issue',
+      amount: item.Ratio || item.RightIssueRatio || item.ExercisePrice || '-',
+      cumDate: item.CumDate || item.CumDateRegular,
+      exDate: item.ExDate || item.ExDateRegular,
+      recordingDate: item.RecordingDate,
+      paymentDate: item.PaymentDate || item.ExerciseDate || '-'
+    })));
   }
 
   // Save to sheet
@@ -1321,7 +1347,7 @@ function scrapeCorpActions() {
   }
 
   if (actions.length > 0) {
-    // Filter out old dividends (ExDate already passed by more than 7 days)
+    // Filter out old actions (ExDate already passed by more than 7 days)
     const now = new Date();
     const validActions = actions.filter(a => {
       if (!a.exDate) return false;
