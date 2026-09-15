@@ -1276,58 +1276,79 @@ function scrapeCorpActions() {
   let actions = [];
   const apiKey = PropertiesService.getScriptProperties().getProperty('SCRAPER_API_KEY');
   
-  function fetchIdx(path) {
-    const targetUrl = 'https://www.idx.co.id/primary/CorporateAction/' + path;
+  if (!apiKey) {
+    console.error('SCRAPER_API_KEY not set');
+    return { count: 0, actions: [] };
+  }
+
+  const endpoints = [
+    { name: 'Dividend', path: 'GetDividend?start=0&length=100' },
+    { name: 'StockSplit', path: 'GetStockSplit?start=0&length=100' },
+    { name: 'RightIssue', path: 'GetRightIssue?start=0&length=100' }
+  ];
+
+  const requests = endpoints.map(ep => {
+    const targetUrl = 'https://www.idx.co.id/primary/CorporateAction/' + ep.path;
     const proxyUrl = 'https://api.scraperapi.com/?api_key=' + apiKey + '&url=' + encodeURIComponent(targetUrl);
-    try {
-      const res = UrlFetchApp.fetch(proxyUrl, { muteHttpExceptions: true });
-      if (res.getResponseCode() === 200) {
-        return JSON.parse(res.getContentText());
+    return {
+      url: proxyUrl,
+      muteHttpExceptions: true
+    };
+  });
+
+  try {
+    // Fetch all 3 endpoints concurrently to avoid 30s timeout on Web App
+    const responses = UrlFetchApp.fetchAll(requests);
+    
+    // 1. DIVIDEND
+    if (responses[0].getResponseCode() === 200) {
+      const divData = JSON.parse(responses[0].getContentText());
+      if (divData && divData.data) {
+        actions = actions.concat(divData.data.map(item => ({
+          ticker: item.StockCode,
+          type: 'Cash Dividend',
+          amount: item.DividendPerShare || '-',
+          cumDate: item.CumDate,
+          exDate: item.ExDate,
+          recordingDate: item.RecordingDate,
+          paymentDate: item.PaymentDate
+        })));
       }
-    } catch(e) { console.error('Error fetching ' + path, e); }
-    return null;
-  }
+    }
 
-  // 1. DIVIDEND
-  const divData = fetchIdx('GetDividend?start=0&length=100');
-  if (divData && divData.data) {
-    actions = actions.concat(divData.data.map(item => ({
-      ticker: item.StockCode,
-      type: 'Cash Dividend',
-      amount: item.DividendPerShare || '-',
-      cumDate: item.CumDate,
-      exDate: item.ExDate,
-      recordingDate: item.RecordingDate,
-      paymentDate: item.PaymentDate
-    })));
-  }
+    // 2. STOCK SPLIT
+    if (responses[1].getResponseCode() === 200) {
+      const splitData = JSON.parse(responses[1].getContentText());
+      if (splitData && splitData.data) {
+        actions = actions.concat(splitData.data.map(item => ({
+          ticker: item.StockCode,
+          type: 'Stock Split',
+          amount: item.Ratio || item.SplitRatio || '-',
+          cumDate: item.CumDate || item.CumDateRegular,
+          exDate: item.ExDate || item.ExDateRegular,
+          recordingDate: item.RecordingDate,
+          paymentDate: item.PaymentDate || '-'
+        })));
+      }
+    }
 
-  // 2. STOCK SPLIT
-  const splitData = fetchIdx('GetStockSplit?start=0&length=100');
-  if (splitData && splitData.data) {
-    actions = actions.concat(splitData.data.map(item => ({
-      ticker: item.StockCode,
-      type: 'Stock Split',
-      amount: item.Ratio || item.SplitRatio || '-',
-      cumDate: item.CumDate || item.CumDateRegular,
-      exDate: item.ExDate || item.ExDateRegular,
-      recordingDate: item.RecordingDate,
-      paymentDate: item.PaymentDate || '-'
-    })));
-  }
-
-  // 3. RIGHT ISSUE
-  const rightData = fetchIdx('GetRightIssue?start=0&length=100');
-  if (rightData && rightData.data) {
-    actions = actions.concat(rightData.data.map(item => ({
-      ticker: item.StockCode,
-      type: 'Right Issue',
-      amount: item.Ratio || item.RightIssueRatio || item.ExercisePrice || '-',
-      cumDate: item.CumDate || item.CumDateRegular,
-      exDate: item.ExDate || item.ExDateRegular,
-      recordingDate: item.RecordingDate,
-      paymentDate: item.PaymentDate || item.ExerciseDate || '-'
-    })));
+    // 3. RIGHT ISSUE
+    if (responses[2].getResponseCode() === 200) {
+      const rightData = JSON.parse(responses[2].getContentText());
+      if (rightData && rightData.data) {
+        actions = actions.concat(rightData.data.map(item => ({
+          ticker: item.StockCode,
+          type: 'Right Issue',
+          amount: item.Ratio || item.RightIssueRatio || item.ExercisePrice || '-',
+          cumDate: item.CumDate || item.CumDateRegular,
+          exDate: item.ExDate || item.ExDateRegular,
+          recordingDate: item.RecordingDate,
+          paymentDate: item.PaymentDate || item.ExerciseDate || '-'
+        })));
+      }
+    }
+  } catch(e) {
+    console.error('Error fetching concurrent corp actions', e);
   }
 
   // Save to sheet
