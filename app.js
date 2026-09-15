@@ -7,7 +7,7 @@
 // ============================================================
 const App = {
   // Google Apps Script deployment URL — user must set this
-  apiUrl: localStorage.getItem('sahamcompress_api_url') || 'https://script.google.com/macros/s/AKfycbxyz4lt2QyKWc39wOs-e6_SW0yNhyAGTv5SpvQEITXALZ4KVdu_Jkl1ux8LIRuGYPpaaA/exec',
+  apiUrl: localStorage.getItem('sahamcompress_api_url') || 'https://script.google.com/macros/s/AKfycbzWkCz4ySe3wh0PfzYM1e0eJHvxxvymJ39Y0cEakEHxAg5nw7ke-YcrACCI6xOTihke1w/exec',
 
   // Current tab
   activeTab: 'dashboard',
