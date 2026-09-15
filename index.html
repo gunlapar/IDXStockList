@@ -205,9 +205,6 @@
           <span class="toolbar-label" id="ticker-count" style="text-transform:none">Loading...</span>
         </div>
 
-        <div class="toolbar-group" style="margin-left:auto">
-          <button class="btn btn-sm" onclick="exportCSV('screener')">[ EXPORT CSV ]</button>
-        </div>
       </div>
 
       <!-- Progress Bar -->
@@ -217,9 +214,12 @@
 
       <!-- Results Table -->
       <div class="table-panel">
-        <div class="table-header">
+        <div class="table-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
           <div class="table-title">
             Screener Results <span class="count" id="screener-count">0</span>
+          </div>
+          <div>
+            <button class="btn btn-sm" onclick="exportCSV('screener')">[ EXPORT CSV ]</button>
           </div>
         </div>
         <div class="table-wrapper">
