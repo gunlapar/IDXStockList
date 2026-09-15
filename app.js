@@ -538,12 +538,19 @@ function updateScanProgress(current, total, text) {
   if (container) container.classList.add('visible');
   
   if (textEl) {
-    const pct = Math.floor((current / total) * 100);
-    const barsCount = Math.floor(pct / 5); // 20 blocks max
-    const filled = '█'.repeat(barsCount);
-    const empty = '░'.repeat(20 - barsCount);
+    // Protect against NaN or Infinity if total is 0
+    let pct = 0;
+    if (total > 0) {
+      pct = Math.floor((current / total) * 100);
+    }
+    // Prevent > 100% or < 0%
+    pct = Math.max(0, Math.min(100, pct));
     
-    // e.g. > Scanning batch 1... [████████░░░░░░░░░░░░] 40% (4/10)
+    // 50 blocks max (1 block = 2%)
+    const barsCount = Math.floor(pct / 2); 
+    const filled = '█'.repeat(barsCount);
+    const empty = '░'.repeat(50 - barsCount);
+    
     textEl.textContent = `> ${text || 'Scanning...'} [${filled}${empty}] ${pct}% (${current}/${total})`;
   }
 }
