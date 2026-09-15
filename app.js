@@ -908,7 +908,11 @@ function renderEquityCurve(data) {
 
 function renderFilterAnalysis(filterStats) {
   const container = document.getElementById('filter-analysis');
-  if (!container || !filterStats) return;
+  if (!container) return;
+  if (!filterStats) {
+    container.innerHTML = `<div style="flex:1; min-width: 200px; font-family: monospace; font-size: 0.8rem; color: var(--text-muted);">Data filter belum tersedia dari API. Deploy backend Apps Script terbaru, lalu trade yang dijurnal dengan Vol Ratio, Compression, dan Breakout akan dihitung.</div>`;
+    return;
+  }
 
   const createCard = (title, data) => {
     let html = `<div style="flex:1; min-width: 200px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); padding: var(--space-sm); border-radius: 4px;">
