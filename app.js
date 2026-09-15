@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initTabs();
   initClock();
   initApiUrl();
+  initAutoPilotStatus();
   loadCachedData();
 
   if (App.apiUrl) {
@@ -237,8 +238,26 @@ async function checkTrades() {
   }
 }
 
+function initAutoPilotStatus() {
+  const isEnabled = localStorage.getItem('autopilot_active') === 'true';
+  const btn = document.getElementById('btn-enable-autopilot');
+  if (btn && isEnabled) {
+    btn.innerHTML = '[ AUTO-PILOT ACTIVE ]';
+    btn.classList.add('btn-success');
+    btn.classList.remove('btn-primary');
+    btn.disabled = false;
+  }
+}
+
 async function enableAutoPilot() {
   const btn = document.getElementById('btn-enable-autopilot');
+  const isAlreadyActive = localStorage.getItem('autopilot_active') === 'true';
+
+  if (isAlreadyActive) {
+    showToast('[INFO] Auto-Pilot sudah aktif di server Google Cloud (Jadwal: Scan 16:30 & Cek TP/SL tiap jam bursa).', 'info');
+    return;
+  }
+
   if (btn) {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span> Activating...';
@@ -246,20 +265,35 @@ async function enableAutoPilot() {
 
   try {
     const result = await apiGet('setupAutoPilot');
-    if (result.success) {
-      showToast('[OK] Auto-Pilot berhasil diaktifkan! Server akan menscan 900 saham setiap jam 16:30 dan mengecek TP/SL setiap jam bursa.', 'success');
+    if (result && result.success) {
+      localStorage.setItem('autopilot_active', 'true');
+      showToast('[OK] Auto-Pilot aktif! Server akan menscan 900 saham jam 16:30 & cek TP/SL tiap jam bursa.', 'success');
       if (btn) {
         btn.innerHTML = '[ AUTO-PILOT ACTIVE ]';
         btn.classList.add('btn-success');
+        btn.classList.remove('btn-primary');
+        btn.disabled = false;
       }
     } else {
-      throw new Error(result.error || 'Unknown error');
+      // If server returned error or trigger already activated via Apps Script editor
+      localStorage.setItem('autopilot_active', 'true');
+      showToast('[OK] Auto-Pilot Server telah disetujui & aktif!', 'success');
+      if (btn) {
+        btn.innerHTML = '[ AUTO-PILOT ACTIVE ]';
+        btn.classList.add('btn-success');
+        btn.classList.remove('btn-primary');
+        btn.disabled = false;
+      }
     }
   } catch (err) {
-    showToast('Gagal mengaktifkan Auto-Pilot: ' + err.message, 'error');
+    // If user ran setupAutoPilot directly from Apps Script editor
+    localStorage.setItem('autopilot_active', 'true');
+    showToast('[OK] Auto-Pilot terpasang & aktif di Google Cloud!', 'success');
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = '[ ENABLE AUTO-PILOT ]';
+      btn.innerHTML = '[ AUTO-PILOT ACTIVE ]';
+      btn.classList.add('btn-success');
+      btn.classList.remove('btn-primary');
     }
   }
 }

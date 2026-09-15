@@ -688,6 +688,18 @@ td.neutral {
   border-color: rgba(255, 71, 87, 0.3);
 }
 
+.btn-success {
+  background: #002b00;
+  color: #00ff00;
+  border-color: #00ff00;
+  font-weight: 600;
+}
+
+.btn-success:hover {
+  background: #004400;
+  border-color: #00ff00;
+}
+
 .btn-danger:hover {
   background: rgba(255, 71, 87, 0.2);
 }

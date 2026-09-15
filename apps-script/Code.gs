@@ -848,41 +848,48 @@ function parseNumber(val) {
  * Endpoint called from frontend to enable all automation triggers
  */
 function setupAutoPilot() {
-  const triggers = ScriptApp.getProjectTriggers();
-  
-  // Delete all existing triggers to avoid duplicates
-  for (const trigger of triggers) {
-    ScriptApp.deleteTrigger(trigger);
+  try {
+    const triggers = ScriptApp.getProjectTriggers();
+    
+    // Delete all existing triggers to avoid duplicates
+    for (const trigger of triggers) {
+      ScriptApp.deleteTrigger(trigger);
+    }
+
+    // 1. Hourly check for TP/SL (runs every 1 hour)
+    ScriptApp.newTrigger('autoCheckDuringMarket')
+      .timeBased()
+      .everyHours(1)
+      .create();
+
+    // 2. Daily Auto-Screener (runs every day at 16:30 approx)
+    ScriptApp.newTrigger('autoScreenerDaily')
+      .timeBased()
+      .everyDays(1)
+      .atHour(16) // Triggers between 16:00 and 17:00
+      .create();
+
+    // 3. Monthly Ticker Scrape (runs 1st of every month at midnight)
+    ScriptApp.newTrigger('autoUpdateTickers')
+      .timeBased()
+      .onMonthDay(1)
+      .atHour(0)
+      .create();
+
+    // 4. Daily Corporate Actions Scrape (runs every day at 01:00)
+    ScriptApp.newTrigger('scrapeCorpActions')
+      .timeBased()
+      .everyDays(1)
+      .atHour(1)
+      .create();
+
+    return { success: true, message: 'Auto-Pilot has been activated successfully!' };
+  } catch (err) {
+    return { 
+      success: false, 
+      error: 'Izin Google Trigger diperlukan. Silakan buka editor Apps Script, pilih fungsi "setupAutoPilot" lalu klik "Run" untuk mengizinkan akses pemicu server.' 
+    };
   }
-
-  // 1. Hourly check for TP/SL (runs every 1 hour)
-  ScriptApp.newTrigger('autoCheckDuringMarket')
-    .timeBased()
-    .everyHours(1)
-    .create();
-
-  // 2. Daily Auto-Screener (runs every day at 16:30 approx)
-  ScriptApp.newTrigger('autoScreenerDaily')
-    .timeBased()
-    .everyDays(1)
-    .atHour(16) // Triggers between 16:00 and 17:00
-    .create();
-
-  // 3. Monthly Ticker Scrape (runs 1st of every month at midnight)
-  ScriptApp.newTrigger('autoUpdateTickers')
-    .timeBased()
-    .onMonthDay(1)
-    .atHour(0)
-    .create();
-
-  // 4. Daily Corporate Actions Scrape (runs every day at 01:00)
-  ScriptApp.newTrigger('scrapeCorpActions')
-    .timeBased()
-    .everyDays(1)
-    .atHour(1)
-    .create();
-
-  return { success: true, message: 'Auto-Pilot has been activated successfully!' };
 }
 
 function autoCheckDuringMarket() {
