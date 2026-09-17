@@ -7,7 +7,7 @@
   <title>IDXBintangPagi</title>
   <meta name="description"
     content="IDXBintangPagi - Screener saham IDX berdasarkan MA5/10/20 compression & breakout detection dengan Fibonacci TP/SL otomatis">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=2">
 
 </head>
 
@@ -200,6 +200,17 @@
         <div class="toolbar-separator"></div>
 
         <div class="toolbar-group">
+          <label class="toolbar-label" for="scan-atr-min">ATR Minimum:</label>
+          <select class="input" id="scan-atr-min">
+            <option value="0" selected>Off</option>
+            <option value="5">&ge; 5%</option>
+            <option value="7">&ge; 7%</option>
+          </select>
+        </div>
+
+        <div class="toolbar-separator"></div>
+
+        <div class="toolbar-group">
           <button class="btn btn-primary" id="btn-start-scan" onclick="startScan()">
             [ EXECUTE SCAN ]
           </button>
@@ -246,6 +257,8 @@
                 <th class="sortable" onclick="sortTable('screener','compressionRatio','number')">Compress%</th>
                 <th class="sortable" onclick="sortTable('screener','bbBandwidth','number')">BB Sqz%</th>
                 <th class="sortable" onclick="sortTable('screener','volumeRatio','number')">Vol Ratio</th>
+                <th class="sortable" onclick="sortTable('screener','atrPct','number')">ATR%</th>
+                <th class="sortable" onclick="sortTable('screener','gapOpenPct','number')">Gap Open%</th>
                 <th>Breakout</th>
                 <th>RSI</th>
                 <th>MACD</th>
@@ -256,7 +269,7 @@
             </thead>
             <tbody id="screener-tbody">
               <tr>
-                <td colspan="14" class="empty-state">
+                <td colspan="16" class="empty-state">
                   <div class="empty-icon">[ NO DATA ]</div>
                   <div class="empty-title">Klik "Start Scan" untuk mulai screening</div>
                   <div class="empty-text">Pilih preset dan threshold, lalu scan</div>
@@ -460,7 +473,7 @@
        SCRIPTS
        ============================================================ -->
   <script src="ticker-list.js"></script>
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=4"></script>
 
 </body>
 

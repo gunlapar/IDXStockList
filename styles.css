@@ -641,6 +641,15 @@ td.neutral {
   border: 1px solid rgba(254, 202, 87, 0.3);
 }
 
+.badge-prime {
+  margin-left: 4px;
+  padding: 2px 7px;
+  background: rgba(0, 212, 170, 0.12);
+  color: var(--accent-green);
+  border: 1px solid rgba(0, 212, 170, 0.4);
+  vertical-align: middle;
+}
+
 /* ============================================================
    BUTTONS
    ============================================================ */

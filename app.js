@@ -24,8 +24,9 @@ const App = {
   scanTotal: 0,
 
   // Sort state
-  sortColumn: null,
+  sortColumn: 'screener-gapOpenPct',
   sortDirection: 'asc',
+  sortType: 'number',
 
   // Auto-refresh interval (ms)
   refreshInterval: 5 * 60 * 1000, // 5 minutes
@@ -42,6 +43,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initApiUrl();
   initAutoPilotStatus();
   loadCachedData();
+
+  document.getElementById('scan-atr-min')?.addEventListener('change', renderScreenerView);
 
   if (App.apiUrl) {
     refreshAllData();
@@ -329,9 +332,13 @@ async function startScan() {
   const threshold = thresholdEl ? parseFloat(thresholdEl.value) : 5;
   const minVolRatio = volRatioEl ? parseFloat(volRatioEl.value) : 1.5;
 
+
   App.isScanning = true;
   App.screenerResults = [];
   App.scanProgress = 0;
+  App.sortColumn = 'screener-gapOpenPct';
+  App.sortDirection = 'asc';
+  App.sortType = 'number';
 
   updateScanUI(true);
   renderScreenerResults([]);
@@ -378,7 +385,7 @@ async function startScan() {
         if (result.results) {
           allResults.push(...result.results);
           App.screenerResults = allResults;
-          renderScreenerResults(allResults);
+          renderScreenerView();
         }
         if (result.errors) allErrors.push(...result.errors);
       } catch (err) {
@@ -446,7 +453,7 @@ async function startScan() {
         allResults.push(...result.results);
         // Live update results
         App.screenerResults = allResults;
-        renderScreenerResults(allResults);
+        renderScreenerView();
       }
       if (result.errors) {
         allErrors.push(...result.errors);
@@ -1035,6 +1042,52 @@ function renderDoneTrades(trades, stats) {
   }
 }
 
+function isPrimeCandidate(result) {
+  const hasBuySetup = result.targets?.tp1 && result.breakoutDirection === 'bullish' &&
+    ['potential', 'confirmed'].includes(result.breakoutSignal) && result.volumeRatio >= 1.5;
+  return Boolean(hasBuySetup && result.compressionRatio <= 1.5 && result.atrPct >= 7);
+}
+
+function compareScreenerValues(a, b, column, type, direction) {
+  let va = a[column];
+  let vb = b[column];
+  const aMissing = va === null || va === undefined || va === '' || (type === 'number' && !Number.isFinite(Number(va)));
+  const bMissing = vb === null || vb === undefined || vb === '' || (type === 'number' && !Number.isFinite(Number(vb)));
+
+  if (aMissing || bMissing) {
+    if (aMissing && bMissing) return 0;
+    return aMissing ? 1 : -1;
+  }
+
+  if (type === 'number') {
+    va = Number(va);
+    vb = Number(vb);
+  } else {
+    va = String(va).toLowerCase();
+    vb = String(vb).toLowerCase();
+  }
+
+  const comparison = va < vb ? -1 : va > vb ? 1 : 0;
+  return direction === 'asc' ? comparison : -comparison;
+}
+
+function getVisibleScreenerResults() {
+  const atrMinimum = Number(document.getElementById('scan-atr-min')?.value || 0);
+  const filtered = App.screenerResults.filter(result =>
+    atrMinimum === 0 || (Number.isFinite(Number(result.atrPct)) && Number(result.atrPct) >= atrMinimum)
+  );
+  const hasScreenerSort = App.sortColumn?.startsWith('screener-');
+  const column = hasScreenerSort ? App.sortColumn.slice('screener-'.length) : 'gapOpenPct';
+  const direction = hasScreenerSort ? App.sortDirection : 'asc';
+  const type = hasScreenerSort ? App.sortType : 'number';
+
+  return [...filtered].sort((a, b) => compareScreenerValues(a, b, column, type, direction));
+}
+
+function renderScreenerView() {
+  renderScreenerResults(getVisibleScreenerResults());
+}
+
 function renderScreenerResults(results) {
   const tbody = document.getElementById('screener-tbody');
   const countEl = document.getElementById('screener-count');
@@ -1043,10 +1096,11 @@ function renderScreenerResults(results) {
   if (countEl) countEl.textContent = results.length;
 
   if (results.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="14" class="empty-state">
+    const filteredOut = App.screenerResults.length > 0;
+    tbody.innerHTML = `<tr><td colspan="16" class="empty-state">
       <div class="empty-icon">[ EMPTY ]</div>
-      <div class="empty-title">Klik "Scan" untuk mulai screening</div>
-      <div class="empty-text">Pilih preset dan threshold, lalu scan</div>
+      <div class="empty-title">${filteredOut ? 'Tidak ada kandidat yang lolos filter ATR' : 'Klik "Scan" untuk mulai screening'}</div>
+      <div class="empty-text">${filteredOut ? 'Turunkan ATR Minimum atau pilih Off' : 'Pilih preset dan threshold, lalu scan'}</div>
     </td></tr>`;
     return;
   }
@@ -1057,12 +1111,16 @@ function renderScreenerResults(results) {
       r.breakoutSignal === 'potential' ? 'badge-potential' : '';
     const volClass = r.volumeRatio >= 1.5 ? 'positive' : 'neutral';
     const hasTargets = r.targets && r.targets.tp1;
-    const canBuy = hasTargets && r.breakoutDirection === 'bullish' &&
+    const hasBuySetup = hasTargets && r.breakoutDirection === 'bullish' &&
       ['potential', 'confirmed'].includes(r.breakoutSignal) && r.volumeRatio >= 1.5;
+    const canBuy = hasBuySetup;
+    const primeBadge = isPrimeCandidate(r)
+      ? ' <span class="badge badge-prime" title="Compression ≤1,5% · Volume ≥1,5x · ATR ≥7%" aria-label="PRIME: Compression maksimal 1,5 persen, volume minimal 1,5 kali, ATR minimal 7 persen">PRIME</span>'
+      : '';
     const corpWarning = r.corpActionWarning ? `<br><span class="badge badge-sl" style="font-size:0.6rem;margin-top:4px">${r.corpActionWarning}</span>` : '';
 
     return `<tr>
-      <td class="ticker">${r.ticker} ${corpWarning}</td>
+      <td class="ticker">${r.ticker}${primeBadge} ${corpWarning}</td>
       <td>${formatPrice(r.close)}</td>
       <td>${formatPrice(r.ma5)}</td>
       <td>${formatPrice(r.ma10)}</td>
@@ -1070,6 +1128,8 @@ function renderScreenerResults(results) {
       <td><span class="badge ${compBadge}">${r.compressionRatio}%</span></td>
       <td><span class="neutral">${r.bbBandwidth !== null ? r.bbBandwidth + '%' : '-'}</span></td>
       <td class="${volClass}">${r.volumeRatio}x</td>
+      <td class="neutral">${r.atrPct !== null && r.atrPct !== undefined ? Number(r.atrPct).toFixed(2) + '%' : '-'}</td>
+      <td class="neutral">${r.gapOpenPct !== null && r.gapOpenPct !== undefined ? (r.gapOpenPct > 0 ? '+' : '') + Number(r.gapOpenPct).toFixed(2) + '%' : '-'}</td>
       <td>${breakBadge ? `<span class="badge ${breakBadge}">${r.breakoutDirection} ${r.breakoutSignal}</span>` : '-'}</td>
       <td class="neutral">${r.rsi !== null ? r.rsi : '-'}</td>
       <td class="neutral">${r.macdHistogram !== null ? r.macdHistogram : '-'}</td>
@@ -1088,21 +1148,6 @@ function renderScreenerResults(results) {
 // ============================================================
 
 function sortTable(tableId, column, type) {
-  // Determine data source
-  let data;
-  let renderFn;
-
-  if (tableId === 'screener') {
-    data = App.screenerResults;
-    renderFn = renderScreenerResults;
-  } else if (tableId === 'running') {
-    data = App.runningTrades;
-    renderFn = renderRunningTrades;
-  } else if (tableId === 'done') {
-    data = App.doneTrades;
-    renderFn = (d) => renderDoneTrades(d);
-  } else return;
-
   // Toggle direction
   if (App.sortColumn === `${tableId}-${column}`) {
     App.sortDirection = App.sortDirection === 'asc' ? 'desc' : 'asc';
@@ -1110,6 +1155,22 @@ function sortTable(tableId, column, type) {
     App.sortColumn = `${tableId}-${column}`;
     App.sortDirection = 'asc';
   }
+  App.sortType = type;
+
+  if (tableId === 'screener') {
+    renderScreenerView();
+    return;
+  }
+
+  let data;
+  let renderFn;
+  if (tableId === 'running') {
+    data = App.runningTrades;
+    renderFn = renderRunningTrades;
+  } else if (tableId === 'done') {
+    data = App.doneTrades;
+    renderFn = (d) => renderDoneTrades(d);
+  } else return;
 
   data.sort((a, b) => {
     let va = a[column], vb = b[column];
@@ -1151,10 +1212,10 @@ function exportCSV(tableId) {
     ]);
     filename = 'done_trades.csv';
   } else if (tableId === 'screener') {
-    headers = ['Ticker', 'Close', 'MA5', 'MA10', 'MA20', 'Compression%', 'Vol Ratio', 'Breakout', 'RSI', 'MACD'];
-    data = App.screenerResults.map(r => [
+    headers = ['Ticker', 'Close', 'MA5', 'MA10', 'MA20', 'Compression%', 'Vol Ratio', 'ATR%', 'Gap Open%', 'PRIME', 'Breakout', 'RSI', 'MACD'];
+    data = getVisibleScreenerResults().map(r => [
       r.ticker, r.close, r.ma5, r.ma10, r.ma20,
-      r.compressionRatio, r.volumeRatio,
+      r.compressionRatio, r.volumeRatio, r.atrPct, r.gapOpenPct, isPrimeCandidate(r) ? 'YES' : 'NO',
       r.breakoutSignal !== 'none' ? r.breakoutDirection + ' ' + r.breakoutSignal : '',
       r.rsi, r.macdHistogram
     ]);

@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from backtest_yfinance import BUY_FEE, SELL_FEE, active_for_snapshot, active_for_year, add_features, run_basis, simulate_trade, snapshot_periods
+from backtest_yfinance import BUY_FEE, SELL_FEE, active_for_snapshot, active_for_year, add_features, monthly_block_bootstrap_difference, run_basis, simulate_trade, snapshot_periods
 
 
 def candles(rows):
@@ -12,6 +12,17 @@ def candles(rows):
 
 
 class BacktestTests(unittest.TestCase):
+    def test_monthly_block_bootstrap_keeps_month_trades_together(self):
+        baseline = "compression_1_5_atr_5_bullish"
+        experiment = "compression_1_5_atr_5_ihsg_regime_bullish"
+        trades = pd.DataFrame({
+            "signal_date": ["2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05", "2024-02-01", "2024-02-02"],
+            "strategy": [baseline, baseline, experiment, experiment, baseline, experiment],
+            "net_return_pct": [0.0, 2.0, 2.0, 4.0, 10.0, 12.0],
+        })
+        low, high = monthly_block_bootstrap_difference(trades, seed=42, samples=100)
+        self.assertAlmostEqual(low, 2.0)
+        self.assertAlmostEqual(high, 2.0)
     def test_features_create_all_compression_variants(self):
         closes = [100] * 30 + [104]
         volumes = [2_000_000] * 30 + [4_000_000]
@@ -22,6 +33,31 @@ class BacktestTests(unittest.TestCase):
         self.assertTrue(last.compression_1_5_bullish)
         self.assertEqual(last.ma_state, "B_confirmed_aligned")
 
+    def test_atr_five_percent_boundary_uses_signal_close(self):
+        def frame(half_range):
+            closes = [99.9] * 30 + [100]
+            volumes = [3_000_000] * 30 + [6_000_000]
+            return candles([
+                {"Open": close, "High": close + half_range, "Low": close - half_range, "Close": close, "Volume": volume}
+                for close, volume in zip(closes, volumes)
+            ])
+
+        exact = add_features(frame(2.5)).iloc[-1]
+        below = add_features(frame(2.499)).iloc[-1]
+        self.assertAlmostEqual(exact.atr_pct_signal, 5.0)
+        self.assertTrue(exact.compression_1_5_atr_5_bullish)
+        self.assertFalse(below.compression_1_5_atr_5_bullish)
+    def test_ihsg_regime_uses_signal_day_ma50_and_slope(self):
+        closes = [99.9] * 69 + [100]
+        volumes = [3_000_000] * 69 + [6_000_000]
+        stock = candles([
+            {"Open": close, "High": close + 2.5, "Low": close - 2.5, "Close": close, "Volume": volume}
+            for close, volume in zip(closes, volumes)
+        ])
+        rising = pd.DataFrame({"Close": range(100, 170)}, index=stock.index)
+        falling = pd.DataFrame({"Close": range(170, 100, -1)}, index=stock.index)
+        self.assertTrue(add_features(stock, rising).iloc[-1].compression_1_5_atr_5_ihsg_regime_bullish)
+        self.assertFalse(add_features(stock, falling).iloc[-1].compression_1_5_atr_5_ihsg_regime_bullish)
     def test_compression_variants_are_nested(self):
         def frame(closes):
             volumes = [3_000_000] * 30 + [6_000_000]
@@ -63,9 +99,9 @@ class BacktestTests(unittest.TestCase):
     def test_one_position_per_ticker_until_exit(self):
         prices = candles([{"Open": 100, "High": 100, "Low": 100, "Close": 100, "Volume": 1}] * 45)
         features = prices.copy()
-        features["compression_5_bullish"] = True
-        features["compression_2_bullish"] = False
-        features["compression_1_5_bullish"] = False
+        features["compression_1_5_bullish"] = True
+        features["compression_1_5_atr_5_bullish"] = True
+        features["compression_1_5_atr_5_ihsg_regime_bullish"] = False
         features["ma_state"] = "C_unaligned"
         features["atr14"] = 1.0
         args = SimpleNamespace(start="2024-01-01", end="2024-03-31", cache_dir="unused", snapshot_frequency="yearly")

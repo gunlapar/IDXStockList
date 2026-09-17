@@ -355,6 +355,7 @@ function analyzeStock(ticker) {
   const closes = data.map(d => d.close);
   const volumes = data.map(d => d.volume);
   const lastCandle = data[data.length - 1];
+  const previousCandle = data.length > 1 ? data[data.length - 2] : null;
 
   // Calculate MAs
   const ma5 = calcSMA(closes, 5);
@@ -453,6 +454,12 @@ function analyzeStock(ticker) {
 
   // ATR & Trading Targets (if breakout detected)
   const atr = calcATR(data, 14);
+  const atrPct = atr !== null && lastCandle.close > 0
+    ? Math.round((atr / lastCandle.close * 100) * 100) / 100
+    : null;
+  const gapOpenPct = previousCandle && previousCandle.close > 0 && Number.isFinite(lastCandle.open)
+    ? Math.round(((lastCandle.open / previousCandle.close - 1) * 100) * 100) / 100
+    : null;
   let targets = null;
   if (breakoutSignal !== 'none' && breakoutDirection === 'bullish' && atr !== null) {
     targets = {
@@ -482,7 +489,9 @@ function analyzeStock(ticker) {
     rsi: rsi ? Math.round(rsi * 100) / 100 : null,
     macdHistogram: macd.histogram ? Math.round(macd.histogram * 100) / 100 : null,
     bbBandwidth: Math.round(bb.bandWidth * 10000) / 100, // as percentage
-    atr: atr ? Math.round(atr * 100) / 100 : null,
+    atr: atr !== null ? Math.round(atr * 100) / 100 : null,
+    atrPct,
+    gapOpenPct,
     targets,
     skip: false
   };

@@ -27,9 +27,8 @@ import yfinance as yf
 BUY_FEE = 0.0015
 SELL_FEE = 0.0025
 STRATEGIES = {
-    "compression_5_bullish": "compression_5_bullish",
-    "compression_2_bullish": "compression_2_bullish",
-    "compression_1_5_bullish": "compression_1_5_bullish",
+    "compression_1_5_atr_5_bullish": "compression_1_5_atr_5_bullish",
+    "compression_1_5_atr_5_ihsg_regime_bullish": "compression_1_5_atr_5_ihsg_regime_bullish",
 }
 
 
@@ -45,6 +44,10 @@ class Trade:
     entry_price: float
     exit_price: float
     atr: float
+    atr_pct_signal: float
+    ihsg_close: float
+    ihsg_ma50: float
+    ihsg_regime: bool
     net_return_pct: float
     r_multiple: float
     holding_days: int
@@ -115,12 +118,10 @@ def download_snapshots(url_template: str, periods: Iterable[pd.Period], ticker_c
     return membership, manifest
 
 
-def cache_path(cache_dir: Path, ticker: str, basis: str) -> Path:
-    return cache_dir / basis / f"{ticker.replace('.JK', '')}.csv"
-
-
+def cache_path(cache_dir: Path, ticker: str, basis: str, start: str, end: str) -> Path:
+    return cache_dir / basis / f"{ticker.replace('.JK', '')}_{start}_{end}.csv"
 def get_prices(ticker: str, basis: str, start: str, end: str, cache_dir: Path) -> pd.DataFrame:
-    path = cache_path(cache_dir, ticker, basis)
+    path = cache_path(cache_dir, ticker, basis, start, end)
     if path.exists():
         frame = pd.read_csv(path, parse_dates=["Date"], index_col="Date")
     else:
@@ -135,7 +136,7 @@ def get_prices(ticker: str, basis: str, start: str, end: str, cache_dir: Path) -
     return frame[["Open", "High", "Low", "Close", "Volume"]].sort_index().dropna()
 
 
-def add_features(frame: pd.DataFrame) -> pd.DataFrame:
+def add_features(frame: pd.DataFrame, benchmark: pd.DataFrame | None = None) -> pd.DataFrame:
     result = frame.copy()
     close, high, low, volume = (result[column] for column in ("Close", "High", "Low", "Volume"))
     for period in (5, 10, 20):
@@ -164,6 +165,22 @@ def add_features(frame: pd.DataFrame) -> pd.DataFrame:
     result["compression_5_bullish"] = bullish_above_mas
     result["compression_2_bullish"] = bullish_above_mas & (result["compression_pct"] <= 2)
     result["compression_1_5_bullish"] = bullish_above_mas & (result["compression_pct"] <= 1.5)
+    result["atr_pct_signal"] = result["atr14"] / close * 100
+    result["compression_1_5_atr_5_bullish"] = result["compression_1_5_bullish"] & (result["atr_pct_signal"] >= 5)
+    if benchmark is None:
+        result[["ihsg_close", "ihsg_ma50"]] = np.nan
+        result["ihsg_regime"] = False
+    else:
+        ihsg_close = benchmark["Close"].sort_index()
+        ihsg_ma50 = ihsg_close.rolling(50).mean()
+        regime = pd.DataFrame({
+            "ihsg_close": ihsg_close,
+            "ihsg_ma50": ihsg_ma50,
+            "ihsg_regime": (ihsg_close > ihsg_ma50) & (ihsg_ma50 > ihsg_ma50.shift(5)),
+        }).reindex(result.index).ffill()
+        result[["ihsg_close", "ihsg_ma50", "ihsg_regime"]] = regime
+        result["ihsg_regime"] = result["ihsg_regime"].fillna(False).astype(bool)
+    result["compression_1_5_atr_5_ihsg_regime_bullish"] = result["compression_1_5_atr_5_bullish"] & result["ihsg_regime"]
     result["ma_state"] = np.where(ma_alignment, "B_confirmed_aligned", "C_unaligned")
     result["potential_bullish"] = bullish_above_mas & ~ma_alignment
     result["confirmed_bullish"] = bullish_above_mas & ma_alignment
@@ -206,6 +223,9 @@ def simulate_trade(frame: pd.DataFrame, signal_index: int, basis: str, strategy:
         basis=basis, strategy=strategy, ticker=ticker, signal_date=frame.index[signal_index].date().isoformat(),
         entry_date=frame.index[entry_index].date().isoformat(), exit_date=frame.index[exit_index].date().isoformat(),
         exit_reason=reason, entry_price=entry_price, exit_price=exit_price, atr=atr,
+        atr_pct_signal=float(signal.get("atr_pct_signal", atr / float(signal.Close) * 100)),
+        ihsg_close=float(signal.get("ihsg_close", np.nan)), ihsg_ma50=float(signal.get("ihsg_ma50", np.nan)),
+        ihsg_regime=bool(signal.get("ihsg_regime", False)),
         net_return_pct=net_return * 100, r_multiple=net_return / risk_fraction if risk_fraction else np.nan,
         holding_days=exit_index - entry_index + 1, ma_state=str(signal.get("ma_state", "unknown")),
     )
@@ -220,7 +240,7 @@ def active_for_year(ticker: str, timestamp: pd.Timestamp, membership: dict[int, 
     return ticker in membership.get(timestamp.year, set())
 
 
-def run_basis(tickers: Iterable[str], membership: dict[str, set[str]], basis: str, args: argparse.Namespace, quality: list[dict]) -> list[Trade]:
+def run_basis(tickers: Iterable[str], membership: dict[str, set[str]], basis: str, args: argparse.Namespace, quality: list[dict], benchmark: pd.DataFrame | None = None) -> list[Trade]:
     trades: list[Trade] = []
     history_start = (pd.Timestamp(args.start) - pd.Timedelta(days=90)).date().isoformat()
     for ticker in tickers:
@@ -232,7 +252,7 @@ def run_basis(tickers: Iterable[str], membership: dict[str, set[str]], basis: st
         if len(prices) < 40:
             quality.append({"basis": basis, "ticker": ticker, "reason": "insufficient_price_history", "detail": len(prices)})
             continue
-        features = add_features(prices)
+        features = add_features(prices, benchmark)
         for strategy, signal_column in STRATEGIES.items():
             next_available_signal = 0
             for signal_index, (timestamp, row) in enumerate(features.iterrows()):
@@ -250,54 +270,106 @@ def run_basis(tickers: Iterable[str], membership: dict[str, set[str]], basis: st
     return trades
 
 
-def bootstrap_difference(a: pd.Series, b: pd.Series, seed: int, samples: int = 2_000) -> tuple[float, float]:
-    if a.empty or b.empty:
+def monthly_block_bootstrap_difference(trades: pd.DataFrame, seed: int, samples: int = 2_000) -> tuple[float, float]:
+    if trades.empty:
+        return np.nan, np.nan
+    baseline = "compression_1_5_atr_5_bullish"
+    experiment = "compression_1_5_atr_5_ihsg_regime_bullish"
+    frame = trades.assign(block=pd.to_datetime(trades.signal_date).dt.to_period("M"))
+    sums = frame.groupby(["block", "strategy"]).net_return_pct.sum().unstack(fill_value=0).reindex(columns=[baseline, experiment], fill_value=0)
+    counts = frame.groupby(["block", "strategy"]).net_return_pct.count().unstack(fill_value=0).reindex(columns=[baseline, experiment], fill_value=0)
+    if not counts[baseline].sum() or not counts[experiment].sum():
         return np.nan, np.nan
     rng = np.random.default_rng(seed)
     differences = np.empty(samples)
-    a_values, b_values = a.to_numpy(), b.to_numpy()
+    block_count = len(sums)
     for index in range(samples):
-        differences[index] = rng.choice(b_values, len(b_values), replace=True).mean() - rng.choice(a_values, len(a_values), replace=True).mean()
+        chosen = rng.integers(0, block_count, block_count)
+        sampled_sums, sampled_counts = sums.iloc[chosen].sum(), counts.iloc[chosen].sum()
+        differences[index] = sampled_sums[experiment] / sampled_counts[experiment] - sampled_sums[baseline] / sampled_counts[baseline]
     return tuple(np.percentile(differences, [2.5, 97.5]))
+
+
+def profit_factor(returns: pd.Series) -> float:
+    gross_profit = returns[returns > 0].sum()
+    gross_loss = -returns[returns < 0].sum()
+    return gross_profit / gross_loss if gross_loss else np.inf
+
+
+def profit_factor_without_top_winners(returns: pd.Series, count: int) -> float:
+    return profit_factor(returns.drop(returns.nlargest(count).index))
 
 
 def build_summary(trades: pd.DataFrame, seed: int) -> pd.DataFrame:
     rows: list[dict] = []
     entry_dates = pd.to_datetime(trades.entry_date)
     periods = {"full": trades.index == trades.index}
-    if entry_dates.max().year <= 2025:
-        periods |= {"in_sample_2020_2023": entry_dates <= pd.Timestamp("2023-12-31"), "holdout_2024_2025": entry_dates >= pd.Timestamp("2024-01-01")}
+    if entry_dates.min().year <= 2023 and entry_dates.max().year >= 2024:
+        periods |= {"in_sample_2021_2023": entry_dates <= pd.Timestamp("2023-12-31"), "holdout_2024_2025": entry_dates >= pd.Timestamp("2024-01-01")}
     for basis in sorted(trades.basis.unique()):
         for period, mask in periods.items():
             subset = trades[(trades.basis == basis) & mask]
-            strong_low, strong_high = bootstrap_difference(
-                subset.loc[subset.strategy == "compression_5_bullish", "net_return_pct"],
-                subset.loc[subset.strategy == "compression_2_bullish", "net_return_pct"], seed,
-            )
-            ultra_low, ultra_high = bootstrap_difference(
-                subset.loc[subset.strategy == "compression_5_bullish", "net_return_pct"],
-                subset.loc[subset.strategy == "compression_1_5_bullish", "net_return_pct"], seed,
-            )
+            atr_low, atr_high = monthly_block_bootstrap_difference(subset, seed)
             for strategy, group in subset.groupby("strategy"):
                 returns = group.net_return_pct
-                gross_profit, gross_loss = returns[returns > 0].sum(), -returns[returns < 0].sum()
                 rows.append({
                     "basis": basis, "period": period, "strategy": strategy, "trades": len(group),
                     "win_rate_pct": (returns > 0).mean() * 100, "mean_return_pct": returns.mean(), "median_return_pct": returns.median(),
-                    "profit_factor": gross_profit / gross_loss if gross_loss else np.inf, "expectancy_r": group.r_multiple.mean(),
+                    "profit_factor": profit_factor(returns), "expectancy_r": group.r_multiple.mean(),
                     "average_holding_days": group.holding_days.mean(),
-                    "compression_2_minus_5_bootstrap_95_low_pct": strong_low,
-                    "compression_2_minus_5_bootstrap_95_high_pct": strong_high,
-                    "compression_1_5_minus_5_bootstrap_95_low_pct": ultra_low,
-                    "compression_1_5_minus_5_bootstrap_95_high_pct": ultra_high,
+                    "profit_factor_excluding_best_1": profit_factor_without_top_winners(returns, 1),
+                    "profit_factor_excluding_best_5": profit_factor_without_top_winners(returns, 5),
+                    "ihsg_regime_minus_atr_5_bootstrap_95_low_pct": atr_low,
+                    "ihsg_regime_minus_atr_5_bootstrap_95_high_pct": atr_high,
                 })
     return pd.DataFrame(rows)
 
 
-def write_report(output_dir: Path, summary: pd.DataFrame, manifest: list[dict], quality: pd.DataFrame, args: argparse.Namespace) -> None:
-    lines = ["# IDX Compression Backtest", "", "## Configuration", "", f"- Test period: {args.start} to {args.end}", f"- Fees: buy {BUY_FEE:.2%}, sell {SELL_FEE:.2%}", "- Exit: full TP1 (+2 ATR), SL (-1.5 ATR), or 20 trading days.", "- Shared setup: 20-day range ≤30%, volume ratio ≥1.5x, close above MA5/10/20, liquidity, and ATR data checks.", "- Compression variants: ≤5% baseline, ≤2% strong, and ≤1.5% ultra.", "- Bollinger squeeze, MA alignment, and breakout are not gates in this experiment.", "- `trades.csv` includes `ma_state` as B (aligned) or C (unaligned) diagnostic only.", "- This 2026 run is exploratory; no production BUY rule is changed by this report.", "", "## Summary", "", "```csv", summary.to_csv(index=False).strip(), "```", "", "## IDX snapshot manifest", "", "```json", json.dumps(manifest, indent=2), "```", "", f"Excluded/data-quality rows: {len(quality)}"]
-    (output_dir / "report.md").write_text("\n".join(lines), encoding="utf-8")
+def build_monthly_summary(trades: pd.DataFrame) -> pd.DataFrame:
+    monthly = trades.copy()
+    monthly["month"] = pd.to_datetime(monthly.entry_date).dt.to_period("M").astype(str)
+    rows = []
+    for (basis, strategy, month), group in monthly.groupby(["basis", "strategy", "month"]):
+        returns = group.net_return_pct
+        rows.append({
+            "basis": basis, "strategy": strategy, "month": month, "trades": len(group),
+            "win_rate_pct": (returns > 0).mean() * 100, "mean_return_pct": returns.mean(),
+            "profit_factor": profit_factor(returns), "expectancy_r": group.r_multiple.mean(),
+        })
+    return pd.DataFrame(rows)
 
+
+def write_report(output_dir: Path, summary: pd.DataFrame, monthly: pd.DataFrame, manifest: list[dict], quality: pd.DataFrame, args: argparse.Namespace) -> None:
+    decision_period = "holdout_2024_2025" if "holdout_2024_2025" in summary.period.values else "full"
+    experiment = summary[(summary.period == decision_period) & (summary.strategy == "compression_1_5_atr_5_ihsg_regime_bullish")]
+    passed = len(experiment) == 2 and all(
+        (row.profit_factor >= 1.3)
+        and (row.expectancy_r > 0)
+        and (row.trades >= 100)
+        and (row.profit_factor_excluding_best_5 > 1)
+        and (row.ihsg_regime_minus_atr_5_bootstrap_95_low_pct >= 0)
+        for row in experiment.itertuples()
+    )
+    lines = [
+        "# IDX ATR + IHSG Regime Backtest", "", "## Configuration", "",
+        f"- Test period: {args.start} to {args.end}",
+        f"- Fees: buy {BUY_FEE:.2%}, sell {SELL_FEE:.2%}",
+        "- Exit: full TP1 (+2 ATR), SL (-1.5 ATR), or 20 trading days.",
+        "- Baseline: compression <=1.5%, ATR14 / signal close >=5%, volume ratio >=1.5x, range20 <=30%, close above MA5/10/20, liquidity, and ATR data checks.",
+        "- Experiment: baseline plus signal-day IHSG close > MA50 and MA50 > its value five trading days earlier.",
+        "- Entry remains next-day open; one active position per ticker per strategy.",
+        "- Bollinger squeeze and MA alignment are not gates.",
+        "- Bootstrap: 2,000 resamples of calendar-month blocks; all trades in a selected month stay together.",
+        f"- This {args.start[:4]}-{args.end[:4]} run is exploratory; no production BUY rule is changed.", "",
+        "## Decision", "", "PASS" if passed else "FAIL", "",
+        f"Decision period: {decision_period}.", "",
+        "Pass requires both adjusted and raw PF >=1.3, positive expectancy R, at least 100 trades, bootstrap lower bound >=0, and PF >1 after removing the five best winners.", "",
+        "## Summary", "", "```csv", summary.to_csv(index=False).strip(), "```", "",
+        "## Monthly breakdown", "", "```csv", monthly.to_csv(index=False).strip(), "```", "",
+        "## IDX snapshot manifest", "", "```json", json.dumps(manifest, indent=2), "```", "",
+        f"Excluded/data-quality rows: {len(quality)}",
+    ]
+    (output_dir / "report.md").write_text("\n".join(lines), encoding="utf-8")
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="A/B test the IDX compression screener with Yahoo Finance data.")
@@ -325,7 +397,14 @@ def main() -> int:
     if args.max_tickers:
         tickers = tickers[:args.max_tickers]
     quality: list[dict] = []
-    trades = [trade for basis in ("adjusted", "raw") for trade in run_basis(tickers, membership, basis, args, quality)]
+    trades: list[Trade] = []
+    history_start = (start - pd.Timedelta(days=90)).date().isoformat()
+    history_end = (end + pd.Timedelta(days=31)).date().isoformat()
+    for basis in ("adjusted", "raw"):
+        benchmark = get_prices("^JKSE", basis, history_start, history_end, Path(args.cache_dir))
+        if len(benchmark) < 55:
+            raise RuntimeError(f"Data IHSG tidak cukup untuk MA50 ({basis}): {len(benchmark)} bar")
+        trades.extend(run_basis(tickers, membership, basis, args, quality, benchmark))
     if not trades:
         raise RuntimeError("Tidak ada trade yang dapat diuji. Periksa snapshot IDX, periode, atau kualitas Yahoo data.")
     run_id = pd.Timestamp.utcnow().strftime("%Y%m%dT%H%M%SZ")
@@ -333,11 +412,13 @@ def main() -> int:
     output_dir.mkdir(parents=True, exist_ok=False)
     trade_frame = pd.DataFrame(asdict(trade) for trade in trades)
     summary = build_summary(trade_frame, args.seed)
+    monthly_summary = build_monthly_summary(trade_frame)
     quality_frame = pd.DataFrame(quality, columns=["basis", "ticker", "reason", "detail"])
     trade_frame.to_csv(output_dir / "trades.csv", index=False)
     summary.to_csv(output_dir / "summary.csv", index=False)
+    monthly_summary.to_csv(output_dir / "monthly_summary.csv", index=False)
     quality_frame.to_csv(output_dir / "data_quality.csv", index=False)
-    write_report(output_dir, summary, manifest, quality_frame, args)
+    write_report(output_dir, summary, monthly_summary, manifest, quality_frame, args)
     print(f"Selesai: {output_dir}")
     return 0
 
