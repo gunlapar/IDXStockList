@@ -6,14 +6,14 @@ const frontend = fs.readFileSync('app.js', 'utf8');
 const backend = fs.readFileSync('apps-script/Code.gs', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
 
-function extractFunction(name) {
-  const start = frontend.indexOf(`function ${name}(`);
+function extractFunction(name, source = frontend) {
+  const start = source.indexOf(`function ${name}(`);
   assert.notEqual(start, -1, `Missing function ${name}`);
-  const bodyStart = frontend.indexOf('{', start);
+  const bodyStart = source.indexOf('{', start);
   let depth = 0;
-  for (let i = bodyStart; i < frontend.length; i++) {
-    if (frontend[i] === '{') depth++;
-    if (frontend[i] === '}' && --depth === 0) return frontend.slice(start, i + 1);
+  for (let i = bodyStart; i < source.length; i++) {
+    if (source[i] === '{') depth++;
+    if (source[i] === '}' && --depth === 0) return source.slice(start, i + 1);
   }
   throw new Error(`Unclosed function ${name}`);
 }
@@ -24,7 +24,7 @@ const context = {
   document: { getElementById: () => ({ value: atrMinimum }) }
 };
 vm.createContext(context);
-for (const name of ['isPrimeCandidate', 'compareScreenerValues', 'getVisibleScreenerResults']) {
+for (const name of ['getAtrPct', 'isPrimeCandidate', 'compareScreenerValues', 'getVisibleScreenerResults']) {
   vm.runInContext(extractFunction(name), context);
 }
 
@@ -33,6 +33,8 @@ const candidate = {
   compressionRatio: 1.5, volumeRatio: 1.5, atrPct: 7, gapOpenPct: 0
 };
 assert.equal(context.isPrimeCandidate(candidate), true);
+assert.equal(context.getAtrPct({ atr: 7, close: 100 }), 7);
+assert.equal(context.isPrimeCandidate({ ...candidate, atrPct: undefined, atr: 7, close: 100 }), true);
 assert.equal(context.isPrimeCandidate({ ...candidate, gapOpenPct: 99 }), true);
 assert.equal(context.isPrimeCandidate({ ...candidate, atrPct: 6.99 }), false);
 assert.equal(context.isPrimeCandidate({ ...candidate, compressionRatio: 1.51 }), false);
@@ -63,5 +65,27 @@ assert.match(backend, /gapOpenPct[\s\S]*?lastCandle\.open\s*\/\s*previousCandle\
 assert.match(html, /id="scan-atr-min"[\s\S]*?value="0" selected[\s\S]*?value="5"[\s\S]*?value="7"/);
 assert.match(frontend, /getVisibleScreenerResults\(\)\.map/);
 assert.match(frontend, /const canBuy = hasBuySetup/);
+assert.match(frontend, /atrPct: atrPct !== null[\s\S]*?gapOpenPct:[\s\S]*?prime: isPrimeCandidate/);
+assert.match(backend, /const TRADE_COLUMN_COUNT = 20/);
+assert.match(backend, /atrPct: row\[17\][\s\S]*?gapOpenPct: row\[18\][\s\S]*?prime: row\[19\]/);
+assert.match(backend, /row\.slice\(0, TRADE_COLUMN_COUNT\)/);
+assert.match(backend, /newDoneData\.length, TRADE_COLUMN_COUNT\)\.setValues/);
+assert.match(frontend, /createCard\('ATR'[\s\S]*?createCard\('GAP OPEN'[\s\S]*?createCard\('PRIME'/);
+
+const backendContext = {};
+vm.createContext(backendContext);
+vm.runInContext(extractFunction('getTradeQualityCategories', backend), backendContext);
+assert.deepEqual(
+  JSON.parse(JSON.stringify(backendContext.getTradeQualityCategories({ atrPct: 5, gapOpenPct: 2, prime: 'YES' }))),
+  { atr: '5-<7%', gap: '0-2%', prime: 'prime' }
+);
+assert.deepEqual(
+  JSON.parse(JSON.stringify(backendContext.getTradeQualityCategories({ atrPct: 7, gapOpenPct: 2.01, prime: 'NO' }))),
+  { atr: '>=7%', gap: '>2%', prime: 'non-prime' }
+);
+assert.deepEqual(
+  JSON.parse(JSON.stringify(backendContext.getTradeQualityCategories({ atrPct: '', gapOpenPct: '', prime: '' }))),
+  { atr: null, gap: null, prime: null }
+);
 
 console.log('Screener quality checks passed.');

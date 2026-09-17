@@ -9,6 +9,8 @@ const SHEET_RUNNING = 'Running';
 const SHEET_DONE = 'DONE TP SL';
 const SHEET_TICKERS = 'Ticker List';
 const SHEET_SCREENER = 'Screener Results';
+const TRADE_COLUMN_COUNT = 20;
+const TRADE_METADATA_HEADERS = ['VOL RATIO', 'COMPRESSION %', 'BREAKOUT STATUS', 'ATR %', 'GAP OPEN %', 'PRIME'];
 
 // ============================================================
 // WEB APP ENTRY POINTS
@@ -562,6 +564,29 @@ function scanStocks(tickers, threshold, minVolRatio = 0) {
 // GOOGLE SHEETS INTEGRATION
 // ============================================================
 
+function ensureTradeMetadataColumns(sheet) {
+  if (sheet.getMaxColumns() < TRADE_COLUMN_COUNT) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), TRADE_COLUMN_COUNT - sheet.getMaxColumns());
+  }
+  const headerRange = sheet.getRange(2, 15, 1, TRADE_METADATA_HEADERS.length);
+  const currentHeaders = headerRange.getValues()[0];
+  headerRange.setValues([TRADE_METADATA_HEADERS.map((header, i) => currentHeaders[i] || header)]);
+}
+
+function getTradeQualityCategories(trade) {
+  const atrValue = trade.atrPct === '' || trade.atrPct === null || trade.atrPct === undefined
+    ? null : parseFloat(String(trade.atrPct).replace(',', '.'));
+  const gapValue = trade.gapOpenPct === '' || trade.gapOpenPct === null || trade.gapOpenPct === undefined
+    ? null : parseFloat(String(trade.gapOpenPct).replace(',', '.'));
+  const primeValue = String(trade.prime || '').trim().toUpperCase();
+
+  return {
+    atr: Number.isFinite(atrValue) ? (atrValue < 5 ? '<5%' : atrValue < 7 ? '5-<7%' : '>=7%') : null,
+    gap: Number.isFinite(gapValue) ? (gapValue <= 0 ? '<=0%' : gapValue <= 2 ? '0-2%' : '>2%') : null,
+    prime: primeValue ? (['YES', 'TRUE', 'PRIME'].includes(primeValue) ? 'prime' : 'non-prime') : null
+  };
+}
+
 /**
  * Read running trades from spreadsheet
  */
@@ -590,6 +615,12 @@ function getRunningTrades() {
       status: row[11],
       currentPrice: parseNumber(row[12]),
       floatingPnl: row[13],
+      volRatio: row[14] || '',
+      compress: row[15] || '',
+      breakout: row[16] || '',
+      atrPct: row[17] === 0 ? 0 : (row[17] || ''),
+      gapOpenPct: row[18] === 0 ? 0 : (row[18] || ''),
+      prime: row[19] || '',
       rowIndex: i + 1 // 1-indexed for Sheets
     });
   }
@@ -626,7 +657,10 @@ function getDoneTrades() {
       exitStatus: row[13] ? row[13].toString().trim() : (row[11] ? row[11].toString().trim() : ''),
       volRatio: row[14] ? row[14].toString().trim() : '',
       compress: row[15] ? row[15].toString().trim() : '',
-      breakout: row[16] ? row[16].toString().trim() : ''
+      breakout: row[16] ? row[16].toString().trim() : '',
+      atrPct: row[17] === 0 ? 0 : (row[17] || ''),
+      gapOpenPct: row[18] === 0 ? 0 : (row[18] || ''),
+      prime: row[19] ? row[19].toString().trim() : ''
     });
   }
 
@@ -654,6 +688,7 @@ function addTrade(params) {
 
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = ss.getSheetByName(SHEET_RUNNING);
+  ensureTradeMetadataColumns(sheet);
   const data = sheet.getDataRange().getValues();
 
   // Check for duplicate ticker in Running sheet
@@ -689,7 +724,10 @@ function addTrade(params) {
     '0,00%',          // FLOATING PNL
     trade.volRatio || '', // VOL RATIO
     trade.compress || '', // COMPRESSION %
-    trade.breakout || ''  // BREAKOUT STATUS
+    trade.breakout || '', // BREAKOUT STATUS
+    trade.atrPct !== undefined && trade.atrPct !== null ? trade.atrPct : '', // ATR %
+    trade.gapOpenPct !== undefined && trade.gapOpenPct !== null ? trade.gapOpenPct : '', // GAP OPEN %
+    trade.prime || ''     // PRIME
   ];
 
   const lastRow = sheet.getLastRow();
@@ -710,11 +748,8 @@ function checkAndUpdateTrades() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const runningSheet = ss.getSheetByName(SHEET_RUNNING);
   const doneSheet = ss.getSheetByName(SHEET_DONE);
-  
-  // Ensure Running sheet has enough columns to write floating PNL, etc (up to 17)
-  if (runningSheet.getMaxColumns() < 17) {
-    runningSheet.insertColumnsAfter(runningSheet.getMaxColumns(), 17 - runningSheet.getMaxColumns());
-  }
+  ensureTradeMetadataColumns(runningSheet);
+  ensureTradeMetadataColumns(doneSheet);
   
   const data = runningSheet.getDataRange().getValues();
   if (data.length <= 2) return { updated: [], movedToDone: 0 };
@@ -726,19 +761,19 @@ function checkAndUpdateTrades() {
   for (let i = 2; i < data.length; i++) {
     const row = data[i];
     
-    // Ensure row array has 17 elements to prevent out-of-bounds in setValues
-    while(row.length < 17) row.push('');
+    // Keep old rows compatible with the three metadata columns added later.
+    while(row.length < TRADE_COLUMN_COUNT) row.push('');
 
     const ticker = row[1] ? row[1].toString().trim() : '';
     if (!ticker) {
-      newRunningData.push(row);
+      newRunningData.push(row.slice(0, TRADE_COLUMN_COUNT));
       continue;
     }
 
     // Fetch current price
     const stockData = getStockData(ticker, 5);
     if (stockData.error || !stockData.current) {
-      newRunningData.push(row);
+      newRunningData.push(row.slice(0, TRADE_COLUMN_COUNT));
       continue;
     }
 
@@ -766,11 +801,11 @@ function checkAndUpdateTrades() {
     row[13] = floatingPnl;      // Column N = Floating PNL
 
     if (newStatus !== 'Running') {
-      const doneArray = row.slice(0, 17);
+      const doneArray = row.slice(0, TRADE_COLUMN_COUNT);
       newDoneData.push(doneArray);
       updated.push({ ticker, newStatus, currentPrice, buyPrice });
     } else {
-      newRunningData.push(row);
+      newRunningData.push(row.slice(0, TRADE_COLUMN_COUNT));
       updated.push({ ticker, newStatus: 'Running', currentPrice, buyPrice, floatingPnl });
     }
 
@@ -780,11 +815,8 @@ function checkAndUpdateTrades() {
 
   // 1. Batch Write to Done Sheet
   if (newDoneData.length > 0) {
-    if (doneSheet.getMaxColumns() < 17) {
-      doneSheet.insertColumnsAfter(doneSheet.getMaxColumns(), 17 - doneSheet.getMaxColumns());
-    }
     const doneLastRow = doneSheet.getLastRow();
-    doneSheet.getRange(doneLastRow + 1, 1, newDoneData.length, 17).setValues(newDoneData);
+    doneSheet.getRange(doneLastRow + 1, 1, newDoneData.length, TRADE_COLUMN_COUNT).setValues(newDoneData);
   }
 
   // 2. Batch Rewrite to Running Sheet
@@ -796,7 +828,7 @@ function checkAndUpdateTrades() {
   
   if (newRunningData.length > 0) {
     // Write new data
-    runningSheet.getRange(3, 1, newRunningData.length, 17).setValues(newRunningData);
+    runningSheet.getRange(3, 1, newRunningData.length, TRADE_COLUMN_COUNT).setValues(newRunningData);
   }
 
   return { updated, movedToDone: newDoneData.length };
@@ -856,7 +888,10 @@ function getDashboardStats() {
   const filterStats = {
     breakout: { bullish: { count: 0, win: 0 }, bearish: { count: 0, win: 0 } },
     compression: { tight: { count: 0, win: 0 }, medium: { count: 0, win: 0 }, loose: { count: 0, win: 0 } },
-    volume: { low: { count: 0, win: 0 }, high: { count: 0, win: 0 }, veryHigh: { count: 0, win: 0 } }
+    volume: { low: { count: 0, win: 0 }, high: { count: 0, win: 0 }, veryHigh: { count: 0, win: 0 } },
+    atr: { '<5%': { count: 0, win: 0 }, '5-<7%': { count: 0, win: 0 }, '>=7%': { count: 0, win: 0 } },
+    gap: { '<=0%': { count: 0, win: 0 }, '0-2%': { count: 0, win: 0 }, '>2%': { count: 0, win: 0 } },
+    prime: { prime: { count: 0, win: 0 }, 'non-prime': { count: 0, win: 0 } }
   };
 
   for (const trade of done.trades) {
@@ -892,6 +927,14 @@ function getDashboardStats() {
         if (isWin) filterStats.volume[cat].win++;
       }
     }
+
+    const quality = getTradeQualityCategories(trade);
+    ['atr', 'gap', 'prime'].forEach(group => {
+      const category = quality[group];
+      if (!category) return;
+      filterStats[group][category].count++;
+      if (isWin) filterStats[group][category].win++;
+    });
   }
 
   return {

@@ -618,6 +618,10 @@ async function confirmTakeTrade() {
 
   const stockData = JSON.parse(modal.dataset.stockData || '{}');
   if (!stockData.ticker) return;
+  const atrPct = getAtrPct(stockData);
+  const gapOpenPct = stockData.gapOpenPct !== null && stockData.gapOpenPct !== undefined && Number.isFinite(Number(stockData.gapOpenPct))
+    ? Number(stockData.gapOpenPct)
+    : null;
 
   try {
     const result = await apiGet('addTrade', {
@@ -628,7 +632,10 @@ async function confirmTakeTrade() {
       cl: stockData.targets ? stockData.targets.sl.toString() : '0',
       volRatio: stockData.volumeRatio ? stockData.volumeRatio.toString() : '0',
       compress: stockData.compressionRatio ? stockData.compressionRatio.toString() : '0',
-      breakout: ((stockData.breakoutDirection || '') + ' ' + (stockData.breakoutSignal || 'none')).trim()
+      breakout: ((stockData.breakoutDirection || '') + ' ' + (stockData.breakoutSignal || 'none')).trim(),
+      atrPct: atrPct !== null ? atrPct.toString() : '',
+      gapOpenPct: gapOpenPct !== null ? gapOpenPct.toString() : '',
+      prime: isPrimeCandidate(stockData) ? 'YES' : 'NO'
     });
     if (result.success) {
       showToast(`[OK] Trade ${stockData.ticker} ditambahkan ke Running`, 'success');
@@ -944,6 +951,9 @@ function renderFilterAnalysis(filterStats) {
   if (Object.values(filterStats.breakout).some(s => s.count > 0)) { html += createCard('BREAKOUT', filterStats.breakout); hasData = true; }
   if (Object.values(filterStats.compression).some(s => s.count > 0)) { html += createCard('COMPRESSION', filterStats.compression); hasData = true; }
   if (Object.values(filterStats.volume).some(s => s.count > 0)) { html += createCard('VOL RATIO', filterStats.volume); hasData = true; }
+  if (filterStats.atr && Object.values(filterStats.atr).some(s => s.count > 0)) { html += createCard('ATR', filterStats.atr); hasData = true; }
+  if (filterStats.gap && Object.values(filterStats.gap).some(s => s.count > 0)) { html += createCard('GAP OPEN', filterStats.gap); hasData = true; }
+  if (filterStats.prime && Object.values(filterStats.prime).some(s => s.count > 0)) { html += createCard('PRIME', filterStats.prime); hasData = true; }
 
   container.innerHTML = hasData ? html : `<div style="flex:1; min-width: 200px; font-family: monospace; font-size: 0.8rem; color: var(--text-muted);">Belum ada data filter trade yang selesai.</div>`;
 }
@@ -1042,15 +1052,26 @@ function renderDoneTrades(trades, stats) {
   }
 }
 
+function getAtrPct(result) {
+  if (result.atrPct !== null && result.atrPct !== undefined && result.atrPct !== '' && Number.isFinite(Number(result.atrPct))) {
+    return Number(result.atrPct);
+  }
+  const atr = Number(result.atr);
+  const close = Number(result.close);
+  return Number.isFinite(atr) && atr > 0 && Number.isFinite(close) && close > 0
+    ? Math.round((atr / close * 100) * 100) / 100
+    : null;
+}
+
 function isPrimeCandidate(result) {
   const hasBuySetup = result.targets?.tp1 && result.breakoutDirection === 'bullish' &&
     ['potential', 'confirmed'].includes(result.breakoutSignal) && result.volumeRatio >= 1.5;
-  return Boolean(hasBuySetup && result.compressionRatio <= 1.5 && result.atrPct >= 7);
+  return Boolean(hasBuySetup && result.compressionRatio <= 1.5 && getAtrPct(result) >= 7);
 }
 
 function compareScreenerValues(a, b, column, type, direction) {
-  let va = a[column];
-  let vb = b[column];
+  let va = column === 'atrPct' ? getAtrPct(a) : a[column];
+  let vb = column === 'atrPct' ? getAtrPct(b) : b[column];
   const aMissing = va === null || va === undefined || va === '' || (type === 'number' && !Number.isFinite(Number(va)));
   const bMissing = vb === null || vb === undefined || vb === '' || (type === 'number' && !Number.isFinite(Number(vb)));
 
@@ -1074,7 +1095,7 @@ function compareScreenerValues(a, b, column, type, direction) {
 function getVisibleScreenerResults() {
   const atrMinimum = Number(document.getElementById('scan-atr-min')?.value || 0);
   const filtered = App.screenerResults.filter(result =>
-    atrMinimum === 0 || (Number.isFinite(Number(result.atrPct)) && Number(result.atrPct) >= atrMinimum)
+    atrMinimum === 0 || (getAtrPct(result) !== null && getAtrPct(result) >= atrMinimum)
   );
   const hasScreenerSort = App.sortColumn?.startsWith('screener-');
   const column = hasScreenerSort ? App.sortColumn.slice('screener-'.length) : 'gapOpenPct';
@@ -1106,6 +1127,7 @@ function renderScreenerResults(results) {
   }
 
   tbody.innerHTML = results.map(r => {
+    const atrPct = getAtrPct(r);
     const compBadge = r.compressionLevel === 'strong' ? 'badge-strong' : 'badge-compressed';
     const breakBadge = r.breakoutSignal === 'confirmed' ? 'badge-confirmed' :
       r.breakoutSignal === 'potential' ? 'badge-potential' : '';
@@ -1128,7 +1150,7 @@ function renderScreenerResults(results) {
       <td><span class="badge ${compBadge}">${r.compressionRatio}%</span></td>
       <td><span class="neutral">${r.bbBandwidth !== null ? r.bbBandwidth + '%' : '-'}</span></td>
       <td class="${volClass}">${r.volumeRatio}x</td>
-      <td class="neutral">${r.atrPct !== null && r.atrPct !== undefined ? Number(r.atrPct).toFixed(2) + '%' : '-'}</td>
+      <td class="neutral">${atrPct !== null ? atrPct.toFixed(2) + '%' : '-'}</td>
       <td class="neutral">${r.gapOpenPct !== null && r.gapOpenPct !== undefined ? (r.gapOpenPct > 0 ? '+' : '') + Number(r.gapOpenPct).toFixed(2) + '%' : '-'}</td>
       <td>${breakBadge ? `<span class="badge ${breakBadge}">${r.breakoutDirection} ${r.breakoutSignal}</span>` : '-'}</td>
       <td class="neutral">${r.rsi !== null ? r.rsi : '-'}</td>
@@ -1215,7 +1237,7 @@ function exportCSV(tableId) {
     headers = ['Ticker', 'Close', 'MA5', 'MA10', 'MA20', 'Compression%', 'Vol Ratio', 'ATR%', 'Gap Open%', 'PRIME', 'Breakout', 'RSI', 'MACD'];
     data = getVisibleScreenerResults().map(r => [
       r.ticker, r.close, r.ma5, r.ma10, r.ma20,
-      r.compressionRatio, r.volumeRatio, r.atrPct, r.gapOpenPct, isPrimeCandidate(r) ? 'YES' : 'NO',
+      r.compressionRatio, r.volumeRatio, getAtrPct(r), r.gapOpenPct, isPrimeCandidate(r) ? 'YES' : 'NO',
       r.breakoutSignal !== 'none' ? r.breakoutDirection + ' ' + r.breakoutSignal : '',
       r.rsi, r.macdHistogram
     ]);
